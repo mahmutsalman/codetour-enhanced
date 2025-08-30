@@ -284,8 +284,8 @@ export class GalleryManager {
       width: 100%;
       height: 100%;
       background-color: rgba(0, 0, 0, 0.9);
-      display: flex;
-      flex-direction: column;
+      display: grid;
+      grid-template-rows: auto 1fr auto;
       z-index: 1000;
     }
     
@@ -329,17 +329,18 @@ export class GalleryManager {
     }
     
     .gallery-main {
-      flex: 1;
       display: flex;
       align-items: center;
       justify-content: center;
       position: relative;
       padding: 20px;
+      overflow: hidden;
+      min-height: 0; /* Important for grid item to shrink */
     }
     
     .image-container {
-      max-width: 90%;
-      max-height: 90%;
+      width: 100%;
+      height: 100%;
       position: relative;
       display: flex;
       align-items: center;
@@ -347,8 +348,10 @@ export class GalleryManager {
     }
     
     .main-image {
-      max-width: 100%;
-      max-height: 100%;
+      max-width: 95%;
+      max-height: 95%;
+      width: auto;
+      height: auto;
       object-fit: contain;
       border-radius: 8px;
       box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
@@ -414,10 +417,32 @@ export class GalleryManager {
       border-top: 1px solid var(--vscode-sideBar-border);
       padding: 15px;
       display: flex;
-      justify-content: center;
+      justify-content: flex-start;
       gap: 10px;
       overflow-x: auto;
+      min-height: 90px;
       max-height: 120px;
+      height: auto;
+      align-items: center;
+      scroll-behavior: smooth;
+    }
+    
+    .thumbnail-strip::-webkit-scrollbar {
+      height: 6px;
+    }
+    
+    .thumbnail-strip::-webkit-scrollbar-track {
+      background: var(--vscode-scrollbarSlider-background);
+      border-radius: 3px;
+    }
+    
+    .thumbnail-strip::-webkit-scrollbar-thumb {
+      background: var(--vscode-scrollbarSlider-hoverBackground);
+      border-radius: 3px;
+    }
+    
+    .thumbnail-strip::-webkit-scrollbar-thumb:hover {
+      background: var(--vscode-scrollbarSlider-activeBackground);
     }
     
     .thumbnail {
@@ -452,18 +477,78 @@ export class GalleryManager {
       opacity: 0.7;
     }
     
+    /* Responsive adjustments */
     @media (max-width: 768px) {
+      .gallery-header {
+        padding: 15px;
+      }
+      
+      .gallery-main {
+        padding: 10px;
+      }
+      
       .nav-button.prev {
         left: 10px;
+        width: 40px;
+        height: 40px;
+        font-size: 16px;
       }
       
       .nav-button.next {
         right: 10px;
+        width: 40px;
+        height: 40px;
+        font-size: 16px;
       }
       
       .thumbnail {
         width: 60px;
         height: 45px;
+      }
+      
+      .thumbnail-strip {
+        min-height: 75px;
+        max-height: 90px;
+        padding: 10px;
+      }
+      
+      .image-info {
+        bottom: 10px;
+        font-size: 12px;
+        padding: 8px 16px;
+      }
+    }
+    
+    /* Very small screens */
+    @media (max-width: 480px) {
+      .thumbnail {
+        width: 50px;
+        height: 38px;
+      }
+      
+      .thumbnail-strip {
+        min-height: 68px;
+        max-height: 80px;
+        gap: 8px;
+      }
+      
+      .gallery-counter {
+        font-size: 10px;
+        padding: 2px 6px;
+      }
+    }
+    
+    /* Large screens - optimize for very tall images */
+    @media (min-height: 900px) {
+      .thumbnail-strip {
+        min-height: 100px;
+        max-height: 140px;
+        padding: 20px;
+      }
+      
+      .thumbnail {
+        width: 90px;
+        height: 68px;
       }
     }
   </style>
@@ -527,22 +612,61 @@ export class GalleryManager {
     
     function goToImage(index) {
       vscode.postMessage({ type: 'goto', index: index });
+      scrollThumbnailIntoView(index);
     }
     
     function closeGallery() {
       vscode.postMessage({ type: 'close' });
     }
     
-    // Keyboard navigation
+    // Auto-scroll active thumbnail into view
+    function scrollThumbnailIntoView(activeIndex) {
+      const thumbnailStrip = document.querySelector('.thumbnail-strip');
+      const thumbnails = document.querySelectorAll('.thumbnail');
+      
+      if (thumbnailStrip && thumbnails[activeIndex]) {
+        const activeThumbnail = thumbnails[activeIndex];
+        const stripRect = thumbnailStrip.getBoundingClientRect();
+        const thumbRect = activeThumbnail.getBoundingClientRect();
+        
+        // Check if thumbnail is out of view
+        if (thumbRect.left < stripRect.left || thumbRect.right > stripRect.right) {
+          activeThumbnail.scrollIntoView({
+            behavior: 'smooth',
+            block: 'nearest',
+            inline: 'center'
+          });
+        }
+      }
+    }
+    
+    // Initialize thumbnail scroll position on load
+    function initializeThumbnailScroll() {
+      const activeThumbnail = document.querySelector('.thumbnail.active');
+      if (activeThumbnail) {
+        activeThumbnail.scrollIntoView({
+          behavior: 'auto',
+          block: 'nearest',
+          inline: 'center'
+        });
+      }
+    }
+    
+    // Call initialization after a brief delay to ensure DOM is ready
+    setTimeout(initializeThumbnailScroll, 100);
+    
+    // Keyboard navigation with thumbnail scrolling
     document.addEventListener('keydown', (event) => {
       switch(event.key) {
         case 'ArrowLeft':
           event.preventDefault();
           previousImage();
+          // Scroll will be handled when the webview updates
           break;
         case 'ArrowRight':
           event.preventDefault();
           nextImage();
+          // Scroll will be handled when the webview updates
           break;
         case 'Escape':
           event.preventDefault();
