@@ -29,14 +29,41 @@ export function registerImageCommands() {
         // Check if clipboard has image
         const hasImage = await hasClipboardImage();
         if (!hasImage) {
-          vscode.window.showInformationMessage("No image found in clipboard");
+          const action = await vscode.window.showInformationMessage(
+            "No image found in clipboard. Try copying an image first, or use an alternative method.",
+            "Add from File Instead",
+            "How to Copy Images"
+          );
+          
+          if (action === "Add from File Instead") {
+            await vscode.commands.executeCommand(`${EXTENSION_NAME}.addImageFromFile`);
+          } else if (action === "How to Copy Images") {
+            vscode.window.showInformationMessage(
+              "To copy images to clipboard: Take a screenshot (Cmd+Shift+4 on macOS), copy from image editors, or copy images from web browsers. Then try the paste command again."
+            );
+          }
           return;
         }
 
-        // Get image from clipboard
-        const clipboardImage = await getClipboardImage();
+        // Show progress while getting image
+        const clipboardImage = await vscode.window.withProgress({
+          location: vscode.ProgressLocation.Notification,
+          title: "Getting image from clipboard...",
+          cancellable: false
+        }, async (progress) => {
+          return await getClipboardImage();
+        });
+
         if (!clipboardImage) {
-          vscode.window.showErrorMessage("Failed to get image from clipboard");
+          const action = await vscode.window.showErrorMessage(
+            "Failed to extract image from clipboard. This might be due to clipboard format or system permissions.",
+            "Add from File Instead",
+            "Try Again"
+          );
+          
+          if (action === "Add from File Instead") {
+            await vscode.commands.executeCommand(`${EXTENSION_NAME}.addImageFromFile`);
+          }
           return;
         }
 
@@ -329,6 +356,74 @@ export function registerImageCommands() {
           await vscode.commands.executeCommand(`${EXTENSION_NAME}.removeImage`, selected.imageId);
           break;
       }
+    }
+  );
+
+  /**
+   * Command: Test clipboard functionality for debugging
+   */
+  vscode.commands.registerCommand(
+    `${EXTENSION_NAME}.testClipboard`,
+    async () => {
+      const platform = require('os').platform();
+      const result: string[] = [];
+      
+      result.push(`🖥️  Platform: ${platform}`);
+      result.push(`📋 Testing clipboard functionality...\n`);
+      
+      try {
+        // Test text clipboard
+        const text = await vscode.env.clipboard.readText();
+        result.push(`✅ Text clipboard: ${text ? `"${text.substring(0, 50)}${text.length > 50 ? '...' : ''}"` : 'Empty'}`);
+      } catch (error) {
+        result.push(`❌ Text clipboard failed: ${error}`);
+      }
+      
+      try {
+        // Test image detection
+        const hasImage = await hasClipboardImage();
+        result.push(`${hasImage ? '✅' : '❌'} Image detection: ${hasImage ? 'Image found' : 'No image found'}`);
+        
+        if (hasImage) {
+          // Try to get image
+          const image = await getClipboardImage();
+          if (image) {
+            result.push(`✅ Image extraction: Success (${image.format}, ${(image.data.length / 1024).toFixed(1)}KB)`);
+          } else {
+            result.push(`❌ Image extraction: Failed`);
+          }
+        }
+      } catch (error) {
+        result.push(`❌ Image clipboard failed: ${error}`);
+      }
+      
+      result.push(`\n💡 Tips for better clipboard support:`);
+      result.push(`   • Take a screenshot (Cmd+Shift+4 on macOS)`);
+      result.push(`   • Copy image from browser or image editor`);
+      result.push(`   • Use "Add from File" as alternative`);
+      
+      const panel = vscode.window.createWebviewPanel(
+        'clipboardTest',
+        'Clipboard Test Results',
+        vscode.ViewColumn.One,
+        { enableScripts: false }
+      );
+      
+      panel.webview.html = `<!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="UTF-8">
+          <style>
+            body { font-family: monospace; padding: 20px; }
+            .success { color: #4CAF50; }
+            .error { color: #f44336; }
+            .info { color: #2196F3; }
+          </style>
+        </head>
+        <body>
+          ${result.map(line => `<div>${line}</div>`).join('')}
+        </body>
+        </html>`;
     }
   );
 }

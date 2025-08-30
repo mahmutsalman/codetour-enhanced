@@ -261,6 +261,11 @@
         "command": "codetour.viewImage",
         "title": "View Image",
         "category": "CodeTour"
+      },
+      {
+        "command": "codetour.testClipboard",
+        "title": "Test Clipboard Functionality",
+        "category": "CodeTour"
       }
     ],
     "menus": {
