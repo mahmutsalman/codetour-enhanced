@@ -228,6 +228,39 @@
         "command": "codetour.viewNotebook",
         "title": "View Notebook",
         "category": "CodeTour"
+      },
+      {
+        "command": "codetour.addImageFromClipboard",
+        "title": "Add Image from Clipboard",
+        "category": "CodeTour",
+        "icon": "$(device-camera)"
+      },
+      {
+        "command": "codetour.addImageFromFile",
+        "title": "Add Image from File",
+        "category": "CodeTour",
+        "icon": "$(file-media)"
+      },
+      {
+        "command": "codetour.manageStepImages",
+        "title": "Manage Step Images",
+        "category": "CodeTour",
+        "icon": "$(images)"
+      },
+      {
+        "command": "codetour.removeImage",
+        "title": "Remove Image",
+        "category": "CodeTour"
+      },
+      {
+        "command": "codetour.updateImageCaption",
+        "title": "Update Image Caption",
+        "category": "CodeTour"
+      },
+      {
+        "command": "codetour.viewImage",
+        "title": "View Image",
+        "category": "CodeTour"
       }
     ],
     "menus": {
@@ -351,6 +384,30 @@
         {
           "command": "codetour.viewNotebook",
           "when": "false"
+        },
+        {
+          "command": "codetour.addImageFromClipboard",
+          "when": "codetour:inTour"
+        },
+        {
+          "command": "codetour.addImageFromFile",
+          "when": "codetour:inTour"
+        },
+        {
+          "command": "codetour.manageStepImages",
+          "when": "codetour:inTour"
+        },
+        {
+          "command": "codetour.removeImage",
+          "when": "false"
+        },
+        {
+          "command": "codetour.updateImageCaption",
+          "when": "false"
+        },
+        {
+          "command": "codetour.viewImage",
+          "when": "false"
         }
       ],
       "comments/commentThread/title": [
@@ -378,6 +435,21 @@
           "command": "codetour.previewTour",
           "group": "inline@4",
           "when": "commentController == codetour && codetour:isEditing && !commentThreadIsEmpty"
+        },
+        {
+          "command": "codetour.addImageFromClipboard",
+          "group": "images@1",
+          "when": "commentController == codetour && codetour:recording && codetour:canEditTour"
+        },
+        {
+          "command": "codetour.addImageFromFile",
+          "group": "images@2",
+          "when": "commentController == codetour && codetour:recording && codetour:canEditTour"
+        },
+        {
+          "command": "codetour.manageStepImages",
+          "group": "images@3",
+          "when": "commentController == codetour"
         }
       ],
       "comments/commentThread/context": [

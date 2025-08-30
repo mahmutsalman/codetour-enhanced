@@ -18,6 +18,7 @@
 				"runOn": "folderOpen"
 			},
 			"isBackground": true,
+			"problemMatcher": "$tsc-watch"
 		},
 		{
 			"type": "npm",

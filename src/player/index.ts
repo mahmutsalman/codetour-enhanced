@@ -22,7 +22,7 @@ import {
   workspace
 } from "vscode";
 import { SMALL_ICON_URL } from "../constants";
-import { CodeTour, store } from "../store";
+import { CodeTour, CodeTourStep, store } from "../store";
 import { initializeStorage } from "../store/storage";
 import {
   getActiveStepMarker,
@@ -54,6 +54,48 @@ const TOUR_REFERENCE_PATTERN =
   /(?:\[(?<linkTitle>[^\]]+)\])?\[(?=\s*[^\]\s])(?<tourTitle>[^\]#]+)?(?:#(?<stepNumber>\d+))?\](?!\()/gm;
 const FILE_REFERENCE_PATTERN = /(\!)?(\[[^\]]+\]\()(\.[^\)]+)(?=\))/gm;
 const CODE_FENCE_PATTERN = /```[^\n]+\n(.+)\n```/gms;
+
+/**
+ * Generates image gallery markdown for a tour step
+ */
+function generateImageGallery(step: CodeTourStep): string {
+  if (!step.images || step.images.length === 0) {
+    return "";
+  }
+
+  let galleryContent = "\n\n---\n\n";
+  galleryContent += `📎 **Attachments (${step.images.length})**\n\n`;
+  
+  for (const image of step.images) {
+    const workspaceFolder = workspace.workspaceFolders?.[0];
+    if (!workspaceFolder) continue;
+    
+    const imageUri = Uri.joinPath(workspaceFolder.uri, image.path);
+    const thumbnailUri = image.thumbnail 
+      ? Uri.joinPath(workspaceFolder.uri, image.thumbnail)
+      : imageUri;
+    
+    // Create thumbnail with clickable link to full image
+    galleryContent += `[![${image.filename}](${thumbnailUri.toString()})](command:codetour.viewImage?${encodeURIComponent(JSON.stringify([image.path]))} "${image.filename}")`;
+    
+    // Add filename and caption
+    galleryContent += `  \n**${image.filename}**`;
+    if (image.caption) {
+      galleryContent += `  \n*${image.caption}*`;
+    }
+    
+    // Add image management commands for editing mode
+    if (store.isRecording && store.isEditing) {
+      const removeArgs = encodeURIComponent(JSON.stringify([image.id]));
+      const captionArgs = encodeURIComponent(JSON.stringify([image.id]));
+      galleryContent += `  \n[$(edit) Edit Caption](command:codetour.updateImageCaption?${captionArgs}) | [$(trash) Remove](command:codetour.removeImage?${removeArgs})`;
+    }
+    
+    galleryContent += "\n\n";
+  }
+  
+  return galleryContent;
+}
 
 export function generatePreviewContent(content: string) {
   return content
@@ -337,6 +379,9 @@ async function renderCurrentStep() {
       }
     }
   }
+
+  // Add image gallery to content
+  content += generateImageGallery(step);
 
   const comment = new CodeTourComment(
     content,

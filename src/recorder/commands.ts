@@ -112,6 +112,7 @@ export function registerRecorderCommands() {
     tourTitle: string | vscode.Uri,
     workspaceRoot?: vscode.Uri
   ) {
+    console.log("DEBUG: recordTourInternal called with:", { tourTitle, workspaceRoot });
     if (!workspaceRoot) {
       workspaceRoot = workspace.workspaceFolders![0].uri;
 
@@ -169,8 +170,11 @@ export function registerRecorderCommands() {
       ref = await promptForTourRef(workspaceRoot);
     }
 
+    console.log("DEBUG: About to write tour file");
     const tour = await writeTourFile(workspaceRoot, tourTitle, ref);
+    console.log("DEBUG: Tour file written:", tour);
 
+    console.log("DEBUG: Starting CodeTour");
     startCodeTour(tour, 0, workspaceRoot, true);
 
     vscode.window.showInformationMessage(
@@ -199,7 +203,13 @@ export function registerRecorderCommands() {
           return;
         }
 
-        recordTourInternal(inputBox.value, workspaceRoot);
+        console.log("DEBUG: Starting tour creation with title:", inputBox.value);
+        try {
+          await recordTourInternal(inputBox.value, workspaceRoot);
+        } catch (error) {
+          console.error("DEBUG: Error in recordTourInternal:", error);
+          vscode.window.showErrorMessage(`Failed to create tour: ${error}`);
+        }
       });
 
       inputBox.onDidTriggerButton(async button => {

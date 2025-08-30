@@ -9,6 +9,17 @@ export interface CodeTourStepPosition {
   character: number;
 }
 
+export interface CodeTourStepImage {
+  id: string;                    // unique identifier
+  filename: string;              // original filename  
+  path: string;                  // relative path from workspace
+  thumbnail?: string;            // thumbnail path
+  caption?: string;              // optional description
+  size: number;                  // file size in bytes
+  dimensions: {width: number; height: number};
+  created: number;              // timestamp
+}
+
 export interface CodeTourStep {
   title?: string;
   description: string;
@@ -34,6 +45,9 @@ export interface CodeTourStep {
 
   pattern?: string;
   markerTitle?: string;
+  
+  // NEW: Image attachments for this step
+  images?: CodeTourStepImage[];
 }
 
 export interface CodeTour {
