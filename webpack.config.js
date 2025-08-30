@@ -44,17 +44,43 @@ const config = {
 const nodeConfig = {
   ...config,
   target: 'node',
+  externals: {
+    vscode: "commonjs vscode",
+    // Node.js built-ins should be external in Node.js environment
+    fs: "commonjs fs",
+    path: "commonjs path",
+    child_process: "commonjs child_process"
+  },
   output: {
     path: path.resolve(__dirname, 'dist'),
     filename: 'extension-node.js',
     libraryTarget: "commonjs2",
     devtoolModuleFilenameTemplate: "../[resource-path]",
+  },
+  resolve: {
+    ...config.resolve,
+    fallback: {
+      // No fallbacks needed for Node.js environment
+    }
   }
 };
 
 const webConfig = {
   ...config,
   target: 'webworker',
+  externals: {
+    vscode: "commonjs vscode"
+  },
+  resolve: {
+    ...config.resolve,
+    fallback: {
+      os: require.resolve("os-browserify/browser"),
+      path: require.resolve("path-browserify"),
+      // Audio functionality requires Node.js - provide false for web build
+      fs: false,
+      child_process: false
+    }
+  },
   output: {
     path: path.resolve(__dirname, 'dist'),
     filename: 'extension-web.js',

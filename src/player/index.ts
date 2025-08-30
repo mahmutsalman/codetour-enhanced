@@ -56,6 +56,48 @@ const FILE_REFERENCE_PATTERN = /(\!)?(\[[^\]]+\]\()(\.[^\)]+)(?=\))/gm;
 const CODE_FENCE_PATTERN = /```[^\n]+\n(.+)\n```/gms;
 
 /**
+ * Generates audio player markdown for a tour step
+ */
+function generateAudioGallery(step: CodeTourStep): string {
+  if (!step.audios || step.audios.length === 0) {
+    return "";
+  }
+
+  let audioContent = "\n\n---\n\n";
+  audioContent += `🎵 **Audio Recordings (${step.audios.length})**\n\n`;
+  
+  for (const audio of step.audios) {
+    const workspaceFolder = workspace.workspaceFolders?.[0];
+    if (!workspaceFolder) continue;
+    
+    // Format duration
+    const minutes = Math.floor(audio.duration / 60);
+    const seconds = Math.floor(audio.duration % 60);
+    const durationText = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+    
+    // Create audio player link
+    audioContent += `🎧 [**${audio.filename}**](command:codetour.playAudio?${encodeURIComponent(JSON.stringify([audio.path]))} "Play ${audio.filename}") `;
+    audioContent += `*(${durationText}, ${audio.format.toUpperCase()})*`;
+    
+    // Add transcript if available
+    if (audio.transcript) {
+      audioContent += `  \n💬 *"${audio.transcript.length > 100 ? audio.transcript.substring(0, 100) + '...' : audio.transcript}"*`;
+    }
+    
+    // Add audio management commands for editing mode
+    if (store.isRecording && store.isEditing) {
+      const removeArgs = encodeURIComponent(JSON.stringify([audio.id]));
+      const transcriptArgs = encodeURIComponent(JSON.stringify([audio.id]));
+      audioContent += `  \n[$(edit) Edit Transcript](command:codetour.updateAudioTranscript?${transcriptArgs}) | [$(trash) Remove](command:codetour.removeAudio?${removeArgs})`;
+    }
+    
+    audioContent += "\n\n";
+  }
+  
+  return audioContent;
+}
+
+/**
  * Generates image gallery markdown for a tour step
  */
 function generateImageGallery(step: CodeTourStep): string {
@@ -379,6 +421,9 @@ async function renderCurrentStep() {
       }
     }
   }
+
+  // Add audio gallery to content
+  content += generateAudioGallery(step);
 
   // Add image gallery to content
   content += generateImageGallery(step);

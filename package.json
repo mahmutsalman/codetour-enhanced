@@ -266,6 +266,58 @@
         "command": "codetour.testClipboard",
         "title": "Test Clipboard Functionality",
         "category": "CodeTour"
+      },
+      {
+        "command": "codetour.startAudioRecording",
+        "title": "Record Audio",
+        "category": "CodeTour",
+        "icon": "$(mic)"
+      },
+      {
+        "command": "codetour.quickRecordAudio",
+        "title": "Quick Record Audio",
+        "category": "CodeTour",
+        "icon": "$(mic)"
+      },
+      {
+        "command": "codetour.playAudio",
+        "title": "Play Audio",
+        "category": "CodeTour",
+        "icon": "$(play)"
+      },
+      {
+        "command": "codetour.manageStepAudios",
+        "title": "Manage Step Audio",
+        "category": "CodeTour",
+        "icon": "$(music)"
+      },
+      {
+        "command": "codetour.removeAudio",
+        "title": "Remove Audio",
+        "category": "CodeTour"
+      },
+      {
+        "command": "codetour.updateAudioTranscript",
+        "title": "Update Audio Transcript",
+        "category": "CodeTour"
+      },
+      {
+        "command": "codetour.listTourAudios",
+        "title": "List All Tour Audio",
+        "category": "CodeTour",
+        "icon": "$(list-unordered)"
+      },
+      {
+        "command": "codetour.stopAudioRecording",
+        "title": "Stop Audio Recording",
+        "category": "CodeTour",
+        "icon": "$(primitive-square)"
+      },
+      {
+        "command": "codetour.addAudioFromFile",
+        "title": "Add Audio from File",
+        "category": "CodeTour",
+        "icon": "$(file-media)"
       }
     ],
     "menus": {
@@ -454,6 +506,26 @@
         {
           "command": "codetour.manageStepImages",
           "group": "images@3",
+          "when": "commentController == codetour"
+        },
+        {
+          "command": "codetour.startAudioRecording",
+          "group": "audio@1",
+          "when": "commentController == codetour && codetour:recording && codetour:canEditTour"
+        },
+        {
+          "command": "codetour.addAudioFromFile",
+          "group": "audio@2",
+          "when": "commentController == codetour && codetour:recording && codetour:canEditTour"
+        },
+        {
+          "command": "codetour.playAudio",
+          "group": "audio@3",
+          "when": "commentController == codetour"
+        },
+        {
+          "command": "codetour.manageStepAudios",
+          "group": "audio@4",
           "when": "commentController == codetour"
         }
       ],

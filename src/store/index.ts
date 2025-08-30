@@ -20,6 +20,17 @@ export interface CodeTourStepImage {
   created: number;              // timestamp
 }
 
+export interface CodeTourStepAudio {
+  id: string;                    // unique identifier
+  filename: string;              // original filename
+  path: string;                  // relative path from workspace
+  duration: number;              // duration in seconds
+  size: number;                  // file size in bytes
+  format: string;                // audio format (webm, mp3, etc.)
+  created: number;               // timestamp
+  transcript?: string;           // optional transcription
+}
+
 export interface CodeTourStep {
   title?: string;
   description: string;
@@ -48,6 +59,9 @@ export interface CodeTourStep {
   
   // NEW: Image attachments for this step
   images?: CodeTourStepImage[];
+  
+  // NEW: Audio attachments for this step
+  audios?: CodeTourStepAudio[];
 }
 
 export interface CodeTour {

@@ -3,6 +3,11 @@ dist
 out
 *.vsix
 
+# Audio recording temp files
+temp/
+*.tmp
+recording_*.wav
+
 # Dependencies
 node_modules
 
