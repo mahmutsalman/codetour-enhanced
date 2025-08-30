@@ -40,6 +40,11 @@ export async function saveTour(tour: CodeTour) {
 
 export function registerRecorderCommands() {
   function getTourFileUri(workspaceRoot: vscode.Uri, title: string) {
+    // Add null safety check
+    if (!workspaceRoot) {
+      throw new Error("Workspace root is required to create tour file URI");
+    }
+
     const file = title
       .toLocaleLowerCase()
       .replace(/\s/g, "-")
@@ -60,12 +65,12 @@ export function registerRecorderCommands() {
   }
 
   async function checkIfTourExists(workspaceRoot: vscode.Uri, title: string) {
-    const uri = getTourFileUri(workspaceRoot, title);
-
     try {
+      const uri = getTourFileUri(workspaceRoot, title);
       const stat = await vscode.workspace.fs.stat(uri);
       return stat.type === vscode.FileType.File;
-    } catch {
+    } catch (error) {
+      console.log("DEBUG: Tour existence check failed:", error);
       return false;
     }
   }
@@ -113,11 +118,18 @@ export function registerRecorderCommands() {
     workspaceRoot?: vscode.Uri
   ) {
     console.log("DEBUG: recordTourInternal called with:", { tourTitle, workspaceRoot });
+    
+    // Ensure we have a valid workspace root
     if (!workspaceRoot) {
-      workspaceRoot = workspace.workspaceFolders![0].uri;
+      if (!workspace.workspaceFolders || workspace.workspaceFolders.length === 0) {
+        vscode.window.showErrorMessage("No workspace folder is open. Please open a folder to create a tour.");
+        return;
+      }
 
-      if (workspace.workspaceFolders!.length > 1) {
-        const items: WorkspaceQuickPickItem[] = workspace.workspaceFolders!.map(
+      workspaceRoot = workspace.workspaceFolders[0].uri;
+
+      if (workspace.workspaceFolders.length > 1) {
+        const items: WorkspaceQuickPickItem[] = workspace.workspaceFolders.map(
           ({ name, uri }) => ({
             label: name,
             uri: uri
@@ -135,6 +147,14 @@ export function registerRecorderCommands() {
         workspaceRoot = response.uri;
       }
     }
+
+    // Validate that we now have a valid workspace root
+    if (!workspaceRoot) {
+      vscode.window.showErrorMessage("Failed to determine workspace root for tour creation.");
+      return;
+    }
+
+    console.log("DEBUG: Using workspace root:", workspaceRoot.toString());
 
     if (typeof tourTitle === "string") {
       const tourExists = await checkIfTourExists(workspaceRoot, tourTitle);
@@ -170,16 +190,21 @@ export function registerRecorderCommands() {
       ref = await promptForTourRef(workspaceRoot);
     }
 
-    console.log("DEBUG: About to write tour file");
-    const tour = await writeTourFile(workspaceRoot, tourTitle, ref);
-    console.log("DEBUG: Tour file written:", tour);
+    try {
+      console.log("DEBUG: About to write tour file");
+      const tour = await writeTourFile(workspaceRoot, tourTitle, ref);
+      console.log("DEBUG: Tour file written:", tour);
 
-    console.log("DEBUG: Starting CodeTour");
-    startCodeTour(tour, 0, workspaceRoot, true);
+      console.log("DEBUG: Starting CodeTour");
+      startCodeTour(tour, 0, workspaceRoot, true);
 
-    vscode.window.showInformationMessage(
-      "CodeTour recording started! Begin creating steps by opening a file, clicking the + button to the left of a line of code, and then adding the appropriate comments."
-    );
+      vscode.window.showInformationMessage(
+        "CodeTour recording started! Begin creating steps by opening a file, clicking the + button to the left of a line of code, and then adding the appropriate comments."
+      );
+    } catch (error) {
+      console.error("DEBUG: Failed to create tour:", error);
+      vscode.window.showErrorMessage(`Failed to create tour: ${error}`);
+    }
   }
 
   vscode.commands.registerCommand(

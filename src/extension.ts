@@ -14,6 +14,7 @@ import {
   startDefaultTour
 } from "./store/actions";
 import { discoverTours as _discoverTours } from "./store/provider";
+import { GalleryManager } from "./gallery/galleryManager";
 
 /**
  * In order to check whether the URI handler was called on activation,
@@ -75,12 +76,31 @@ class URIHandler implements vscode.UriHandler {
 }
 
 export async function activate(context: vscode.ExtensionContext) {
-  registerPlayerModule(context);
-  registerRecorderModule();
-  registerLiveShareModule();
+  try {
+    console.log("CodeTour: Starting activation...");
+    
+    // Initialize core modules first
+    registerPlayerModule(context);
+    console.log("CodeTour: Player module registered");
+    
+    registerRecorderModule();
+    console.log("CodeTour: Recorder module registered");
+    
+    registerLiveShareModule();
+    console.log("CodeTour: LiveShare module registered");
 
-  const uriHandler = new URIHandler();
-  context.subscriptions.push(vscode.window.registerUriHandler(uriHandler));
+    // Initialize gallery manager with error handling
+    try {
+      GalleryManager.getInstance(context.extensionUri);
+      GalleryManager.registerCommands();
+      console.log("CodeTour: Gallery manager initialized successfully");
+    } catch (galleryError) {
+      console.error("CodeTour: Gallery manager initialization failed, but continuing:", galleryError);
+      // Don't let gallery errors break the extension
+    }
+
+    const uriHandler = new URIHandler();
+    context.subscriptions.push(vscode.window.registerUriHandler(uriHandler));
 
   if (vscode.workspace.workspaceFolders) {
     await discoverTours();
@@ -92,5 +112,12 @@ export async function activate(context: vscode.ExtensionContext) {
     initializeGitApi();
   }
 
+  console.log("CodeTour: Activation completed successfully");
   return initializeApi(context);
+  
+  } catch (error) {
+    console.error("CodeTour: Extension activation failed:", error);
+    vscode.window.showErrorMessage(`CodeTour activation failed: ${error}`);
+    throw error;
+  }
 }

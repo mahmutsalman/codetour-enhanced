@@ -7,6 +7,7 @@ import { store } from "../store";
 import { getClipboardImage, hasClipboardImage } from "../utils/clipboard";
 import { addImageToStep, removeImageFromStep, updateImageCaption } from "../utils/imageStorage";
 import { saveTour } from "./commands";
+import { GalleryManager } from "../gallery/galleryManager";
 
 /**
  * Registers image-related commands for CodeTour
@@ -228,7 +229,7 @@ export function registerImageCommands() {
   );
 
   /**
-   * Command: View image in full size
+   * Command: View image in gallery with navigation
    */
   vscode.commands.registerCommand(
     `${EXTENSION_NAME}.viewImage`,
@@ -239,21 +240,33 @@ export function registerImageCommands() {
       }
 
       try {
-        // Get workspace URI and join with image path
-        const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-        if (!workspaceFolder) {
-          vscode.window.showErrorMessage("No workspace folder found");
+        // Get current tour and step context
+        if (!store.activeTour) {
+          vscode.window.showErrorMessage("No active tour found");
           return;
         }
 
-        const imageUri = vscode.Uri.joinPath(workspaceFolder.uri, imagePath);
+        const tour = store.activeTour.tour;
+        const stepIndex = store.activeTour.step;
+        const step = tour.steps[stepIndex];
         
-        // Open image in VS Code
-        await vscode.commands.executeCommand('vscode.open', imageUri);
+        if (!step.images || step.images.length === 0) {
+          vscode.window.showErrorMessage("No images found in current step");
+          return;
+        }
+
+        // Use pre-initialized gallery manager
+        const galleryManager = GalleryManager.getInstance();
+        await galleryManager.openGallery(
+          tour.id,
+          stepIndex,
+          step.images,
+          imagePath
+        );
 
       } catch (error) {
-        console.error("Failed to view image:", error);
-        vscode.window.showErrorMessage(`Failed to view image: ${error}`);
+        console.error("Failed to open image gallery:", error);
+        vscode.window.showErrorMessage(`Failed to open image gallery: ${error}`);
       }
     }
   );
