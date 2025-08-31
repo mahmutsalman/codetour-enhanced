@@ -427,11 +427,11 @@ async function renderCurrentStep() {
     }
   }
 
-  // Add audio gallery to content
-  content += generateAudioGallery(step);
-
-  // Add image gallery to content
-  content += generateImageGallery(step);
+  // Add audio and image galleries only when not in editing mode
+  if (!store.isEditing) {
+    content += generateAudioGallery(step);
+    content += generateImageGallery(step);
+  }
 
   const comment = new CodeTourComment(
     content,
@@ -552,7 +552,8 @@ export function registerPlayerModule(context: ExtensionContext) {
               step.description,
               step.line,
               step.directory,
-              step.view
+              step.view,
+              step.images
             ])
           ]
         : null
