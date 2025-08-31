@@ -1,30 +1,176 @@
-# Contributing
+# Contributing to CodeTour Enhanced
 
-This project welcomes contributions and suggestions. Most contributions require you to
-agree to a Contributor License Agreement (CLA) declaring that you have the right to,
-and actually do, grant us the rights to use your contribution. For details, visit
-https://cla.microsoft.com.
+We welcome contributions to CodeTour Enhanced! This enhanced version builds upon Microsoft's original CodeTour extension while adding powerful new features like audio recording, improved image galleries, and activity bar integration.
 
-When you submit a pull request, a CLA-bot will automatically determine whether you need
-to provide a CLA and decorate the PR appropriately (e.g., label, comment). Simply follow the
-instructions provided by the bot. You will only need to do this once across all repositories using our CLA.
+## 🎯 About This Project
 
-This project has adopted the [Microsoft Open Source Code of Conduct](https://opensource.microsoft.com/codeofconduct/).
-For more information see the [Code of Conduct FAQ](https://opensource.microsoft.com/codeofconduct/faq/)
-or contact [opencode@microsoft.com](mailto:opencode@microsoft.com) with any additional questions or comments.
+CodeTour Enhanced is based on [Microsoft's CodeTour](https://github.com/microsoft/codetour) and maintains full compatibility with the original tour format while adding significant enhancements.
 
-## Getting Started
+## 🚀 Getting Started
 
-Hey 👋 Thanks for wanting to contribute to `CodeTour`! Getting started is simple:
+### Prerequisites
+- Node.js 16 or higher
+- VS Code for testing
+- Git for version control
 
-1. Clone the repository
-1. CD into the cloned directory
-1. Run `npm install`
-1. Make your changes and press `F5` to debug them
+### Development Setup
 
-If you want to test/install the extension outside of a debugging session, perform the following:
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/mahmutsalman/codetour-enhanced.git
+   cd codetour-enhanced
+   ```
 
-1. Run `npm run package` to create a vsix
-1. Run `code --install-extension <vsix-path>` to install the extension
+2. **Install dependencies**
+   ```bash
+   npm install
+   ```
 
-If you run into any issues or have any questions, please don't hesitate to file an issue on this repo, and we'll try to get you unblocked ASAP 👍
+3. **Start development**
+   ```bash
+   npm run watch
+   ```
+
+4. **Debug the extension**
+   - Press `F5` to launch a new VS Code window with the extension loaded
+   - Make changes and reload the window to test them
+
+### Building and Testing
+
+1. **Build the extension**
+   ```bash
+   npm run build
+   ```
+
+2. **Package for installation**
+   ```bash
+   npm run package
+   ```
+
+3. **Install the VSIX**
+   ```bash
+   code --install-extension codetour-enhanced-0.60.0.vsix
+   ```
+
+## 🛠️ Development Guidelines
+
+### Code Style
+- Follow existing TypeScript conventions
+- Use meaningful variable and function names
+- Add JSDoc comments for public APIs
+- Maintain compatibility with original CodeTour APIs
+
+### Enhanced Features
+When contributing to the enhanced features, please consider:
+
+#### Audio System
+- Maintain WaveSurfer.js integration patterns
+- Ensure cross-platform audio compatibility
+- Test with different audio devices
+- Validate audio format support
+
+#### Image Gallery
+- Follow responsive design principles
+- Test image loading performance
+- Ensure accessibility compliance
+- Validate clipboard integration
+
+#### Activity Bar Integration
+- Maintain VS Code UX patterns
+- Test sidebar functionality
+- Ensure proper context handling
+- Validate keyboard navigation
+
+### Testing
+- Test on Windows, macOS, and Linux
+- Verify compatibility with different VS Code versions
+- Test with existing CodeTour files
+- Validate new features work as expected
+
+## 📝 Pull Request Process
+
+1. **Create a feature branch**
+   ```bash
+   git checkout -b feature/your-feature-name
+   ```
+
+2. **Make your changes**
+   - Follow the coding guidelines above
+   - Add tests if applicable
+   - Update documentation as needed
+
+3. **Test thoroughly**
+   - Test the extension in VS Code
+   - Verify existing tours still work
+   - Test new functionality
+
+4. **Submit your PR**
+   - Provide a clear description of changes
+   - Reference any related issues
+   - Include screenshots for UI changes
+
+### PR Requirements
+- ✅ All existing functionality preserved
+- ✅ New features properly documented
+- ✅ Code follows project conventions
+- ✅ No breaking changes to tour format
+- ✅ Performance impact considered
+
+## 🐛 Bug Reports
+
+When reporting bugs, please include:
+- VS Code version
+- Operating system
+- Extension version
+- Steps to reproduce
+- Expected vs actual behavior
+- Sample tour files (if applicable)
+
+## 💡 Feature Requests
+
+We're always interested in new ideas! When suggesting features:
+- Explain the use case
+- Consider compatibility with original CodeTour
+- Think about implementation complexity
+- Consider user experience impact
+
+## 🤝 Areas for Contribution
+
+We particularly welcome contributions in:
+
+### Core Features
+- Performance optimizations
+- Cross-platform compatibility
+- Accessibility improvements
+- Error handling enhancements
+
+### Enhanced Features
+- Audio codec improvements
+- Additional image formats
+- Advanced tour analytics
+- Enhanced UI components
+
+### Documentation
+- Usage examples
+- API documentation
+- Tutorial creation
+- Localization
+
+## 📄 License
+
+By contributing to CodeTour Enhanced, you agree that your contributions will be licensed under the MIT License, the same license as the original CodeTour project.
+
+## 🙏 Attribution
+
+This project builds upon the excellent work of Microsoft's CodeTour team. All contributors to the enhanced version join a community that respects and builds upon that foundation.
+
+## 📞 Questions?
+
+If you have questions about contributing, please:
+1. Check existing issues and discussions
+2. Create a new issue with the "question" label
+3. Be patient - we'll get back to you soon!
+
+---
+
+**Thank you for contributing to CodeTour Enhanced! 🎉**

@@ -1,32 +1,43 @@
 {
-  "name": "codetour",
-  "displayName": "CodeTour",
-  "description": "VS Code extension that allows you to record and playback guided tours of codebases, directly within the editor",
-  "publisher": "vsls-contrib",
-  "version": "0.0.59",
+  "name": "codetour-enhanced",
+  "displayName": "CodeTour Enhanced",
+  "description": "Enhanced VS Code extension with audio recording, improved image gallery, and activity bar integration for guided codebase tours. Based on Microsoft's CodeTour.",
+  "publisher": "mahmutsalman",
+  "version": "0.60.0",
   "author": {
-    "name": "Microsoft Corporation"
+    "name": "Mahmut Salman",
+    "email": "mahmut.salman@example.com"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/microsoft/codetour"
+    "url": "https://github.com/mahmutsalman/codetour-enhanced"
   },
   "bugs": {
-    "url": "https://github.com/microsoft/codetour/issues"
+    "url": "https://github.com/mahmutsalman/codetour-enhanced/issues"
   },
-  "homepage": "https://github.com/microsoft/codetour#readme",
+  "homepage": "https://github.com/mahmutsalman/codetour-enhanced#readme",
   "license": "MIT",
   "icon": "images/icon.png",
   "engines": {
     "vscode": "^1.60.0"
   },
   "categories": [
+    "Education",
     "Other"
   ],
   "keywords": [
+    "CodeTour",
+    "Enhanced",
+    "Audio Recording",
+    "Image Gallery",
+    "Activity Bar",
+    "Code Navigation",
     "Collaboration",
-    "Sharing"
+    "Sharing",
+    "Tutorial",
+    "Walkthrough"
   ],
+  "credits": "Based on Microsoft's CodeTour extension (https://github.com/microsoft/codetour). Enhanced with audio recording, improved image handling, and activity bar integration.",
   "extensionKind": [
     "workspace"
   ],
@@ -39,7 +50,7 @@
   "contributes": {
     "configuration": {
       "type": "object",
-      "title": "CodeTour",
+      "title": "CodeTour Enhanced",
       "properties": {
         "codetour.promptForWorkspaceTours": {
           "type": "boolean",
@@ -71,7 +82,7 @@
       {
         "command": "codetour.addContentStep",
         "title": "Add Tour Step",
-        "category": "CodeTour"
+        "category": "CodeTour Enhanced"
       },
       {
         "command": "codetour.addDirectoryStep",
@@ -112,7 +123,7 @@
       {
         "command": "codetour.resetProgress",
         "title": "Reset Progress",
-        "category": "CodeTour"
+        "category": "CodeTour Enhanced"
       },
       {
         "command": "codetour.resetTourProgress",
@@ -133,13 +144,13 @@
       {
         "command": "codetour.editTour",
         "title": "Edit Tour",
-        "category": "CodeTour",
+        "category": "CodeTour Enhanced",
         "icon": "$(edit)"
       },
       {
         "command": "codetour.endTour",
         "title": "End Tour",
-        "category": "CodeTour",
+        "category": "CodeTour Enhanced",
         "icon": "$(primitive-square)"
       },
       {
@@ -149,7 +160,7 @@
       {
         "command": "codetour.hideMarkers",
         "title": "Hide Tour Markers",
-        "category": "CodeTour",
+        "category": "CodeTour Enhanced",
         "icon": "$(eye-closed)"
       },
       {
@@ -175,12 +186,12 @@
         "command": "codetour.openTourFile",
         "title": "Open Tour File...",
         "icon": "$(folder-opened)",
-        "category": "CodeTour"
+        "category": "CodeTour Enhanced"
       },
       {
         "command": "codetour.openTourUrl",
         "title": "Open Tour URL...",
-        "category": "CodeTour"
+        "category": "CodeTour Enhanced"
       },
       {
         "command": "codetour.previewTour",
@@ -195,13 +206,13 @@
       {
         "command": "codetour.recordTour",
         "title": "Record Tour",
-        "category": "CodeTour",
+        "category": "CodeTour Enhanced",
         "icon": "$(add)"
       },
       {
         "command": "codetour.resumeTour",
         "title": "Resume Tour",
-        "category": "CodeTour"
+        "category": "CodeTour Enhanced"
       },
       {
         "command": "codetour.saveTourStep",
@@ -211,13 +222,13 @@
       {
         "command": "codetour.showMarkers",
         "title": "Show Tour Markers",
-        "category": "CodeTour",
+        "category": "CodeTour Enhanced",
         "icon": "$(eye)"
       },
       {
         "command": "codetour.startTour",
         "title": "Start Tour",
-        "category": "CodeTour",
+        "category": "CodeTour Enhanced",
         "icon": "$(play)"
       },
       {
@@ -227,96 +238,96 @@
       {
         "command": "codetour.viewNotebook",
         "title": "View Notebook",
-        "category": "CodeTour"
+        "category": "CodeTour Enhanced"
       },
       {
         "command": "codetour.addImageFromClipboard",
         "title": "Add Image from Clipboard",
-        "category": "CodeTour",
+        "category": "CodeTour Enhanced",
         "icon": "$(device-camera)"
       },
       {
         "command": "codetour.addImageFromFile",
         "title": "Add Image from File",
-        "category": "CodeTour",
+        "category": "CodeTour Enhanced",
         "icon": "$(file-media)"
       },
       {
         "command": "codetour.manageStepImages",
         "title": "Manage Step Images",
-        "category": "CodeTour",
+        "category": "CodeTour Enhanced",
         "icon": "$(images)"
       },
       {
         "command": "codetour.removeImage",
         "title": "Remove Image",
-        "category": "CodeTour"
+        "category": "CodeTour Enhanced"
       },
       {
         "command": "codetour.updateImageCaption",
         "title": "Update Image Caption",
-        "category": "CodeTour"
+        "category": "CodeTour Enhanced"
       },
       {
         "command": "codetour.viewImage",
         "title": "View Image",
-        "category": "CodeTour"
+        "category": "CodeTour Enhanced"
       },
       {
         "command": "codetour.testClipboard",
         "title": "Test Clipboard Functionality",
-        "category": "CodeTour"
+        "category": "CodeTour Enhanced"
       },
       {
         "command": "codetour.startAudioRecording",
         "title": "Record Audio",
-        "category": "CodeTour",
+        "category": "CodeTour Enhanced",
         "icon": "$(mic)"
       },
       {
         "command": "codetour.quickRecordAudio",
         "title": "Quick Record Audio",
-        "category": "CodeTour",
+        "category": "CodeTour Enhanced",
         "icon": "$(mic)"
       },
       {
         "command": "codetour.playAudio",
         "title": "Play Audio",
-        "category": "CodeTour",
+        "category": "CodeTour Enhanced",
         "icon": "$(play)"
       },
       {
         "command": "codetour.manageStepAudios",
         "title": "Manage Step Audio",
-        "category": "CodeTour",
+        "category": "CodeTour Enhanced",
         "icon": "$(music)"
       },
       {
         "command": "codetour.removeAudio",
         "title": "Remove Audio",
-        "category": "CodeTour"
+        "category": "CodeTour Enhanced"
       },
       {
         "command": "codetour.updateAudioTranscript",
         "title": "Update Audio Transcript",
-        "category": "CodeTour"
+        "category": "CodeTour Enhanced"
       },
       {
         "command": "codetour.listTourAudios",
         "title": "List All Tour Audio",
-        "category": "CodeTour",
+        "category": "CodeTour Enhanced",
         "icon": "$(list-unordered)"
       },
       {
         "command": "codetour.stopAudioRecording",
         "title": "Stop Audio Recording",
-        "category": "CodeTour",
+        "category": "CodeTour Enhanced",
         "icon": "$(primitive-square)"
       },
       {
         "command": "codetour.addAudioFromFile",
         "title": "Add Audio from File",
-        "category": "CodeTour",
+        "category": "CodeTour Enhanced",
         "icon": "$(file-media)"
       }
     ],
@@ -737,7 +748,7 @@
       "activitybar": [
         {
           "id": "codetour",
-          "title": "CodeTour",
+          "title": "CodeTour Enhanced",
           "icon": "images/codetour-icon.svg"
         }
       ]
