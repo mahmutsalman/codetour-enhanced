@@ -12,7 +12,7 @@ import { saveTour } from "./commands";
 /**
  * Registers audio-related commands for CodeTour
  */
-export function registerAudioCommands() {
+export function registerAudioCommands(context?: vscode.ExtensionContext) {
   
   /**
    * Command: Start audio recording for current step
@@ -148,7 +148,7 @@ export function registerAudioCommands() {
           return;
         }
 
-        const player = AudioPlayerManager.getInstance();
+        const player = AudioPlayerManager.getInstance(context?.extensionUri);
         await player.openPlayer(tour, stepIndex, step.audios, audioPath);
 
       } catch (error) {

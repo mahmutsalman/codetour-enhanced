@@ -83,7 +83,7 @@ export async function activate(context: vscode.ExtensionContext) {
     registerPlayerModule(context);
     console.log("CodeTour: Player module registered");
     
-    registerRecorderModule();
+    registerRecorderModule(context);
     console.log("CodeTour: Recorder module registered");
     
     registerLiveShareModule();

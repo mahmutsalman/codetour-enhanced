@@ -1,8 +1,9 @@
+import * as vscode from "vscode";
 import { registerRecorderCommands } from "./commands";
 import { registerCompletionProvider } from "./completionProvider";
 import { registerImageCommands } from "./imageCommands";
 
-export function registerRecorderModule() {
+export function registerRecorderModule(context?: vscode.ExtensionContext) {
   registerRecorderCommands();
   registerImageCommands();
   
@@ -11,7 +12,7 @@ export function registerRecorderModule() {
   if (typeof process !== 'undefined' && process.versions && process.versions.node) {
     try {
       const { registerAudioCommands } = require("./audioCommands");
-      registerAudioCommands();
+      registerAudioCommands(context);
     } catch (error) {
       console.warn("Audio commands could not be registered:", error);
     }

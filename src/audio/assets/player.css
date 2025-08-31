@@ -1,0 +1,425 @@
+/* WaveSurfer Audio Player - VS Code Theme Integration */
+
+.wavesurfer-player {
+    font-family: var(--vscode-font-family);
+    color: var(--vscode-foreground);
+    background-color: var(--vscode-editor-background);
+    margin: 0;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.player-container {
+    border: 1px solid var(--vscode-panel-border);
+    border-radius: 8px;
+    padding: 20px;
+    background-color: var(--vscode-editor-background);
+}
+
+/* Waveform Container */
+.waveform-container {
+    margin: 20px 0;
+    border: 1px solid var(--vscode-input-border);
+    border-radius: 4px;
+    background-color: var(--vscode-input-background);
+    overflow: hidden;
+}
+
+.waveform-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 80px;
+    color: var(--vscode-descriptionForeground);
+    font-style: italic;
+}
+
+/* Timeline */
+.timeline-container {
+    margin-top: 10px;
+    height: 20px;
+    position: relative;
+}
+
+/* Minimap */
+.minimap-container {
+    height: 30px;
+    margin-top: 10px;
+    border: 1px solid var(--vscode-input-border);
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+/* Controls */
+.waveform-controls {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    margin: 15px 0;
+    flex-wrap: wrap;
+}
+
+.control-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.play-pause-btn {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    border: none;
+    background-color: var(--vscode-button-background);
+    color: var(--vscode-button-foreground);
+    font-size: 20px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+
+.play-pause-btn:hover {
+    background-color: var(--vscode-button-hoverBackground);
+    transform: scale(1.05);
+}
+
+.play-pause-btn:active {
+    transform: scale(0.95);
+}
+
+.play-pause-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+}
+
+/* Time Display */
+.time-display {
+    font-family: var(--vscode-editor-font-family);
+    font-size: 13px;
+    color: var(--vscode-descriptionForeground);
+    background-color: var(--vscode-badge-background);
+    color: var(--vscode-badge-foreground);
+    padding: 4px 8px;
+    border-radius: 12px;
+    min-width: 80px;
+    text-align: center;
+    font-weight: 500;
+}
+
+/* Speed Control */
+.speed-control {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.speed-label {
+    font-size: 12px;
+    color: var(--vscode-descriptionForeground);
+    font-weight: 500;
+}
+
+.speed-selector {
+    padding: 6px 10px;
+    border: 1px solid var(--vscode-input-border);
+    background-color: var(--vscode-input-background);
+    color: var(--vscode-input-foreground);
+    border-radius: 4px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: border-color 0.2s ease;
+}
+
+.speed-selector:focus {
+    outline: none;
+    border-color: var(--vscode-focusBorder);
+}
+
+/* Volume Control */
+.volume-control {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.volume-icon {
+    font-size: 14px;
+    color: var(--vscode-descriptionForeground);
+    width: 16px;
+    text-align: center;
+}
+
+.volume-slider {
+    width: 80px;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--vscode-input-border);
+    outline: none;
+    cursor: pointer;
+}
+
+.volume-slider::-webkit-slider-thumb {
+    appearance: none;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--vscode-button-background);
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.volume-slider::-webkit-slider-thumb:hover {
+    background: var(--vscode-button-hoverBackground);
+}
+
+/* Zoom Controls */
+.zoom-controls {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.zoom-btn {
+    width: 28px;
+    height: 28px;
+    border: 1px solid var(--vscode-button-border);
+    background-color: var(--vscode-button-secondaryBackground);
+    color: var(--vscode-button-secondaryForeground);
+    border-radius: 4px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    transition: all 0.2s ease;
+}
+
+.zoom-btn:hover {
+    background-color: var(--vscode-button-secondaryHoverBackground);
+}
+
+.zoom-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Audio List */
+.audio-list {
+    margin-bottom: 20px;
+}
+
+.audio-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    border: 1px solid var(--vscode-input-border);
+    border-radius: 6px;
+    margin-bottom: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    position: relative;
+}
+
+.audio-item:hover {
+    background-color: var(--vscode-list-hoverBackground);
+    border-color: var(--vscode-list-hoverForeground);
+}
+
+.audio-item.active {
+    background-color: var(--vscode-list-activeSelectionBackground);
+    color: var(--vscode-list-activeSelectionForeground);
+    border-color: var(--vscode-focusBorder);
+}
+
+.audio-item.active::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    background-color: var(--vscode-focusBorder);
+    border-radius: 0 2px 2px 0;
+}
+
+.audio-icon {
+    font-size: 18px;
+    width: 24px;
+    text-align: center;
+    color: var(--vscode-symbolIcon-colorForeground);
+}
+
+.audio-info {
+    flex: 1;
+}
+
+.audio-filename {
+    font-weight: 600;
+    margin-bottom: 4px;
+    color: var(--vscode-list-activeSelectionForeground);
+}
+
+.audio-details {
+    font-size: 11px;
+    color: var(--vscode-descriptionForeground);
+    display: flex;
+    gap: 8px;
+}
+
+.audio-detail-item {
+    padding: 2px 6px;
+    background-color: var(--vscode-badge-background);
+    color: var(--vscode-badge-foreground);
+    border-radius: 8px;
+    font-weight: 500;
+}
+
+/* Current Playing Indicator */
+.current-audio-title {
+    font-size: 18px;
+    font-weight: 600;
+    margin-bottom: 15px;
+    color: var(--vscode-foreground);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.playing-indicator {
+    display: inline-flex;
+    gap: 2px;
+}
+
+.playing-bar {
+    width: 3px;
+    background-color: var(--vscode-charts-green);
+    animation: audioPlayingAnimation 1.2s ease-in-out infinite;
+}
+
+.playing-bar:nth-child(1) { height: 12px; animation-delay: 0s; }
+.playing-bar:nth-child(2) { height: 16px; animation-delay: 0.1s; }
+.playing-bar:nth-child(3) { height: 14px; animation-delay: 0.2s; }
+.playing-bar:nth-child(4) { height: 18px; animation-delay: 0.3s; }
+
+@keyframes audioPlayingAnimation {
+    0%, 40%, 100% { transform: scaleY(0.4); }
+    20% { transform: scaleY(1.0); }
+}
+
+/* Transcript */
+.transcript {
+    margin-top: 20px;
+    padding: 15px;
+    background-color: var(--vscode-textBlockQuote-background);
+    border-left: 4px solid var(--vscode-textBlockQuote-border);
+    border-radius: 0 4px 4px 0;
+}
+
+.transcript-label {
+    font-weight: 600;
+    margin-bottom: 10px;
+    color: var(--vscode-textBlockQuote-foreground);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.transcript-text {
+    font-style: italic;
+    color: var(--vscode-textBlockQuote-foreground);
+    line-height: 1.5;
+}
+
+.no-transcript {
+    color: var(--vscode-descriptionForeground);
+    font-style: italic;
+}
+
+/* Loading States */
+.loading {
+    opacity: 0.6;
+    pointer-events: none;
+}
+
+.loading::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 20px;
+    height: 20px;
+    margin: -10px 0 0 -10px;
+    border: 2px solid var(--vscode-progressBar-background);
+    border-top: 2px solid var(--vscode-charts-blue);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Error States */
+.error-message {
+    padding: 10px 15px;
+    background-color: var(--vscode-inputValidation-errorBackground);
+    border: 1px solid var(--vscode-inputValidation-errorBorder);
+    color: var(--vscode-inputValidation-errorForeground);
+    border-radius: 4px;
+    margin: 10px 0;
+    font-size: 12px;
+}
+
+/* Responsive Design */
+@media (max-width: 600px) {
+    .waveform-controls {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+    }
+    
+    .control-group {
+        justify-content: center;
+    }
+    
+    .audio-item {
+        flex-direction: column;
+        align-items: flex-start;
+        text-align: left;
+    }
+    
+    .audio-details {
+        flex-direction: column;
+        gap: 4px;
+    }
+}
+
+/* Keyboard Focus Indicators */
+.waveform-container:focus-visible,
+.play-pause-btn:focus-visible,
+.speed-selector:focus-visible,
+.volume-slider:focus-visible,
+.zoom-btn:focus-visible {
+    outline: 2px solid var(--vscode-focusBorder);
+    outline-offset: 2px;
+}
+
+/* Accessibility */
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}

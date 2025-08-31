@@ -8,10 +8,14 @@ import { getAudioUri } from "../utils/audioStorage";
 export class AudioPlayerManager {
   private static instance: AudioPlayerManager | null = null;
   private panel: vscode.WebviewPanel | null = null;
+  private extensionUri?: vscode.Uri;
 
-  public static getInstance(): AudioPlayerManager {
+  public static getInstance(extensionUri?: vscode.Uri): AudioPlayerManager {
     if (!AudioPlayerManager.instance) {
       AudioPlayerManager.instance = new AudioPlayerManager();
+    }
+    if (extensionUri) {
+      AudioPlayerManager.instance.extensionUri = extensionUri;
     }
     return AudioPlayerManager.instance;
   }
@@ -34,17 +38,19 @@ export class AudioPlayerManager {
 
     this.panel = vscode.window.createWebviewPanel(
       'audioPlayer',
-      `Audio Player - ${tour.title} (Step ${stepIndex + 1})`,
+      `🎵 Audio Player - ${tour.title} (Step ${stepIndex + 1})`,
       vscode.ViewColumn.Beside,
       {
         enableScripts: true,
+        retainContextWhenHidden: true,
         localResourceRoots: [
+          ...(this.extensionUri ? [this.extensionUri] : []),
           vscode.workspace.workspaceFolders?.[0]?.uri || vscode.Uri.file('')
         ]
       }
     );
 
-    this.panel.webview.html = this.getPlayerHtml(tour, stepIndex, audios, selectedAudioPath);
+    this.panel.webview.html = await this.getPlayerHtml(tour, stepIndex, audios, selectedAudioPath);
 
     this.panel.onDidDispose(() => {
       this.panel = null;
@@ -54,18 +60,19 @@ export class AudioPlayerManager {
   /**
    * Updates the player content with new audio list
    */
-  private updatePlayerContent(
+  private async updatePlayerContent(
     tour: CodeTour, 
     stepIndex: number, 
     audios: CodeTourStepAudio[], 
     selectedAudioPath?: string
-  ): void {
+  ): Promise<void> {
     if (!this.panel) return;
     
     // Send updated audio list to the webview
+    const audioList = await this.convertAudiosForWebview(audios);
     this.panel.webview.postMessage({
       type: 'updateAudios',
-      audios: this.convertAudiosForWebview(audios),
+      audios: audioList,
       selectedPath: selectedAudioPath
     });
   }
@@ -73,232 +80,127 @@ export class AudioPlayerManager {
   /**
    * Converts audio metadata for webview consumption
    */
-  private convertAudiosForWebview(audios: CodeTourStepAudio[]): any[] {
+  private async convertAudiosForWebview(audios: CodeTourStepAudio[]): Promise<any[]> {
     const workspaceUri = vscode.workspace.workspaceFolders?.[0]?.uri;
     if (!workspaceUri) return [];
 
-    return audios.map(audio => ({
-      id: audio.id,
-      filename: audio.filename,
-      duration: audio.duration,
-      format: audio.format,
-      created: audio.created,
-      transcript: audio.transcript,
-      uri: this.panel?.webview.asWebviewUri(getAudioUri(audio, workspaceUri)).toString()
-    }));
+    const audioPromises = audios.map(async (audio) => {
+      try {
+        // Read audio file as buffer
+        const audioUri = getAudioUri(audio, workspaceUri);
+        const audioData = await vscode.workspace.fs.readFile(audioUri);
+        
+        // Convert to base64 data URL
+        const base64 = Buffer.from(audioData).toString('base64');
+        const mimeType = this.getMimeType(audio.format);
+        const dataUrl = `data:${mimeType};base64,${base64}`;
+        
+        return {
+          id: audio.id,
+          filename: audio.filename,
+          duration: audio.duration,
+          format: audio.format,
+          created: audio.created,
+          transcript: audio.transcript,
+          dataUrl: dataUrl,
+          uri: this.panel?.webview.asWebviewUri(audioUri).toString() // Keep URI as fallback
+        };
+      } catch (error) {
+        console.error(`Failed to convert audio ${audio.filename}:`, error);
+        // Return without dataUrl if conversion fails
+        return {
+          id: audio.id,
+          filename: audio.filename,
+          duration: audio.duration,
+          format: audio.format,
+          created: audio.created,
+          transcript: audio.transcript,
+          uri: this.panel?.webview.asWebviewUri(getAudioUri(audio, workspaceUri)).toString()
+        };
+      }
+    });
+
+    return Promise.all(audioPromises);
   }
 
   /**
-   * Generates the HTML for the audio player
+   * Gets the MIME type for an audio format
    */
-  private getPlayerHtml(
+  private getMimeType(format: string): string {
+    switch (format.toLowerCase()) {
+      case 'wav': return 'audio/wav';
+      case 'mp3': return 'audio/mpeg';
+      case 'ogg': return 'audio/ogg';
+      case 'webm': return 'audio/webm';
+      case 'm4a': return 'audio/mp4';
+      case 'aac': return 'audio/aac';
+      case 'flac': return 'audio/flac';
+      default: return 'audio/wav'; // Default fallback
+    }
+  }
+
+  /**
+   * Gets resource URIs for webview assets
+   */
+  private getResourceUris() {
+    const extensionUri = this.extensionUri;
+    const webview = this.panel?.webview;
+    
+    if (!webview || !extensionUri) {
+      throw new Error('Webview or extension URI not available');
+    }
+
+    return {
+      wavesurferJs: webview.asWebviewUri(
+        vscode.Uri.joinPath(extensionUri, 'src', 'audio', 'assets', 'wavesurfer.js')
+      ),
+      playerCss: webview.asWebviewUri(
+        vscode.Uri.joinPath(extensionUri, 'src', 'audio', 'assets', 'player.css')
+      )
+    };
+  }
+
+  /**
+   * Generates the HTML for the WaveSurfer audio player
+   */
+  private async getPlayerHtml(
     tour: CodeTour, 
     stepIndex: number, 
     audios: CodeTourStepAudio[], 
     selectedAudioPath?: string
-  ): string {
-    const audioList = this.convertAudiosForWebview(audios);
+  ): Promise<string> {
+    const audioList = await this.convertAudiosForWebview(audios);
     const selectedAudio = selectedAudioPath 
-      ? audioList.find(a => a.uri.includes(selectedAudioPath))
+      ? audioList.find(a => a.uri && a.uri.includes(selectedAudioPath))
       : audioList[0];
+
+    const resources = this.getResourceUris();
+    const nonce = this.getNonce();
 
     return `<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Audio Player</title>
-    <style>
-        body {
-            font-family: var(--vscode-font-family);
-            color: var(--vscode-foreground);
-            background-color: var(--vscode-editor-background);
-            margin: 0;
-            padding: 20px;
-            display: flex;
-            flex-direction: column;
-            gap: 20px;
-        }
-        
-        .player-container {
-            border: 1px solid var(--vscode-panel-border);
-            border-radius: 8px;
-            padding: 20px;
-            background-color: var(--vscode-editor-background);
-        }
-        
-        .audio-list {
-            margin-bottom: 20px;
-        }
-        
-        .audio-item {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            padding: 10px;
-            border: 1px solid var(--vscode-input-border);
-            border-radius: 4px;
-            margin-bottom: 10px;
-            cursor: pointer;
-            transition: background-color 0.2s;
-        }
-        
-        .audio-item:hover {
-            background-color: var(--vscode-list-hoverBackground);
-        }
-        
-        .audio-item.active {
-            background-color: var(--vscode-list-activeSelectionBackground);
-            border-color: var(--vscode-focusBorder);
-        }
-        
-        .audio-icon {
-            font-size: 16px;
-            width: 20px;
-            text-align: center;
-        }
-        
-        .audio-info {
-            flex: 1;
-        }
-        
-        .audio-filename {
-            font-weight: bold;
-            margin-bottom: 4px;
-        }
-        
-        .audio-details {
-            font-size: 12px;
-            color: var(--vscode-descriptionForeground);
-        }
-        
-        .player {
-            border-top: 1px solid var(--vscode-panel-border);
-            padding-top: 20px;
-        }
-        
-        .player-controls {
-            display: flex;
-            align-items: center;
-            gap: 15px;
-            margin-bottom: 15px;
-        }
-        
-        .play-pause-btn {
-            width: 50px;
-            height: 50px;
-            border-radius: 50%;
-            border: none;
-            background-color: var(--vscode-button-background);
-            color: var(--vscode-button-foreground);
-            font-size: 20px;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: background-color 0.2s;
-        }
-        
-        .play-pause-btn:hover {
-            background-color: var(--vscode-button-hoverBackground);
-        }
-        
-        .progress-container {
-            flex: 1;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-        
-        .progress-bar {
-            flex: 1;
-            height: 6px;
-            background-color: var(--vscode-progressBar-background);
-            border-radius: 3px;
-            cursor: pointer;
-            position: relative;
-        }
-        
-        .progress-fill {
-            height: 100%;
-            background-color: var(--vscode-progressBar-foreground);
-            border-radius: 3px;
-            width: 0%;
-            transition: width 0.1s;
-        }
-        
-        .time-display {
-            font-size: 12px;
-            color: var(--vscode-descriptionForeground);
-            min-width: 80px;
-            text-align: center;
-        }
-        
-        .speed-controls {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-        
-        .speed-label {
-            font-size: 12px;
-            color: var(--vscode-descriptionForeground);
-        }
-        
-        .speed-selector {
-            padding: 4px 8px;
-            border: 1px solid var(--vscode-input-border);
-            background-color: var(--vscode-input-background);
-            color: var(--vscode-input-foreground);
-            border-radius: 4px;
-        }
-        
-        .transcript {
-            margin-top: 15px;
-            padding: 10px;
-            background-color: var(--vscode-textBlockQuote-background);
-            border-left: 4px solid var(--vscode-textBlockQuote-border);
-            border-radius: 4px;
-        }
-        
-        .transcript-label {
-            font-weight: bold;
-            margin-bottom: 8px;
-            color: var(--vscode-textBlockQuote-foreground);
-        }
-        
-        .transcript-text {
-            font-style: italic;
-            color: var(--vscode-textBlockQuote-foreground);
-        }
-        
-        .no-transcript {
-            color: var(--vscode-descriptionForeground);
-            font-style: italic;
-        }
-        
-        .volume-controls {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            margin-top: 10px;
-        }
-        
-        .volume-slider {
-            width: 100px;
-        }
-        
-        .current-audio-title {
-            font-size: 18px;
-            font-weight: bold;
-            margin-bottom: 10px;
-            color: var(--vscode-foreground);
-        }
-    </style>
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; 
+          script-src ${this.panel?.webview.cspSource} 'nonce-${nonce}'; 
+          style-src ${this.panel?.webview.cspSource} 'unsafe-inline'; 
+          media-src ${this.panel?.webview.cspSource} data: blob:; 
+          connect-src ${this.panel?.webview.cspSource} https: data: blob:;">
+    <title>WaveSurfer Audio Player</title>
+    <link rel="stylesheet" href="${resources.playerCss}">
 </head>
-<body>
-    <h2>🔊 Audio Player</h2>
-    <div class="current-audio-title" id="currentAudioTitle">No audio selected</div>
+<body class="wavesurfer-player">
+    <h2>🎵 WaveSurfer Audio Player</h2>
+    <div class="current-audio-title" id="currentAudioTitle">
+        <span id="titleText">No audio selected</span>
+        <div id="playingIndicator" class="playing-indicator" style="display: none;">
+            <div class="playing-bar"></div>
+            <div class="playing-bar"></div>
+            <div class="playing-bar"></div>
+            <div class="playing-bar"></div>
+        </div>
+    </div>
     
     <div class="player-container">
         <div class="audio-list" id="audioList">
@@ -306,65 +208,118 @@ export class AudioPlayerManager {
         </div>
         
         <div class="player">
-            <audio id="audioElement" preload="metadata"></audio>
+            <!-- Waveform Container -->
+            <div class="waveform-container" id="waveformContainer">
+                <div class="waveform-loading" id="waveformLoading">Loading waveform...</div>
+                <div id="waveform"></div>
+                <div id="timeline" class="timeline-container"></div>
+            </div>
             
-            <div class="player-controls">
-                <button id="playPauseBtn" class="play-pause-btn">▶</button>
+            <!-- Minimap -->
+            <div id="minimap" class="minimap-container"></div>
+            
+            <!-- Controls -->
+            <div class="waveform-controls">
+                <button id="playPauseBtn" class="play-pause-btn" disabled>
+                    <span class="sr-only">Play/Pause</span>
+                    ▶
+                </button>
                 
-                <div class="progress-container">
-                    <div class="progress-bar" id="progressBar">
-                        <div class="progress-fill" id="progressFill"></div>
-                    </div>
+                <div class="control-group">
                     <div class="time-display" id="timeDisplay">0:00 / 0:00</div>
                 </div>
-            </div>
-            
-            <div class="speed-controls">
-                <span class="speed-label">Speed:</span>
-                <select id="speedSelector" class="speed-selector">
-                    <option value="0.5">0.5x</option>
-                    <option value="0.75">0.75x</option>
-                    <option value="1" selected>1x</option>
-                    <option value="1.25">1.25x</option>
-                    <option value="1.5">1.5x</option>
-                    <option value="2">2x</option>
-                    <option value="2.5">2.5x</option>
-                </select>
                 
-                <div class="volume-controls">
-                    <span class="speed-label">Volume:</span>
-                    <input type="range" id="volumeSlider" class="volume-slider" min="0" max="100" value="100">
+                <div class="control-group">
+                    <div class="speed-control">
+                        <span class="speed-label">Speed:</span>
+                        <select id="speedSelector" class="speed-selector">
+                            <option value="0.5">0.5x</option>
+                            <option value="0.75">0.75x</option>
+                            <option value="1" selected>1x</option>
+                            <option value="1.25">1.25x</option>
+                            <option value="1.5">1.5x</option>
+                            <option value="2">2x</option>
+                            <option value="2.5">2.5x</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="control-group">
+                    <div class="volume-control">
+                        <span class="volume-icon" id="volumeIcon">🔊</span>
+                        <input type="range" id="volumeSlider" class="volume-slider" 
+                               min="0" max="100" value="100" 
+                               aria-label="Volume">
+                    </div>
+                </div>
+                
+                <div class="control-group">
+                    <div class="zoom-controls">
+                        <button id="zoomOutBtn" class="zoom-btn" title="Zoom Out" aria-label="Zoom Out">-</button>
+                        <button id="zoomInBtn" class="zoom-btn" title="Zoom In" aria-label="Zoom In">+</button>
+                    </div>
                 </div>
             </div>
             
+            <!-- Transcript -->
             <div id="transcript" class="transcript" style="display: none;">
-                <div class="transcript-label">Transcript:</div>
+                <div class="transcript-label">
+                    📝 Transcript
+                </div>
                 <div id="transcriptText" class="transcript-text"></div>
             </div>
+            
+            <!-- Error Display -->
+            <div id="errorMessage" class="error-message" style="display: none;"></div>
         </div>
     </div>
 
-    <script>
+    <script nonce="${nonce}">
+        // Module wrapper for CommonJS in browser context
+        window.module = {exports: {}};
+        window.exports = window.module.exports;
+    </script>
+    <script nonce="${nonce}" src="${resources.wavesurferJs}"></script>
+    <script nonce="${nonce}">
+        // Make WaveSurfer globally available after CommonJS export
+        window.WaveSurfer = window.module.exports;
+    </script>
+    <script nonce="${nonce}">
         let audios = ${JSON.stringify(audioList)};
         let currentAudio = null;
+        let wavesurfer = null;
         let isPlaying = false;
         
-        const audioElement = document.getElementById('audioElement');
-        const playPauseBtn = document.getElementById('playPauseBtn');
-        const progressBar = document.getElementById('progressBar');
-        const progressFill = document.getElementById('progressFill');
-        const timeDisplay = document.getElementById('timeDisplay');
-        const speedSelector = document.getElementById('speedSelector');
-        const volumeSlider = document.getElementById('volumeSlider');
-        const audioList = document.getElementById('audioList');
-        const currentAudioTitle = document.getElementById('currentAudioTitle');
-        const transcript = document.getElementById('transcript');
-        const transcriptText = document.getElementById('transcriptText');
+        // DOM elements
+        const elements = {
+            audioList: document.getElementById('audioList'),
+            currentAudioTitle: document.getElementById('titleText'),
+            playingIndicator: document.getElementById('playingIndicator'),
+            playPauseBtn: document.getElementById('playPauseBtn'),
+            timeDisplay: document.getElementById('timeDisplay'),
+            speedSelector: document.getElementById('speedSelector'),
+            volumeSlider: document.getElementById('volumeSlider'),
+            volumeIcon: document.getElementById('volumeIcon'),
+            zoomInBtn: document.getElementById('zoomInBtn'),
+            zoomOutBtn: document.getElementById('zoomOutBtn'),
+            transcript: document.getElementById('transcript'),
+            transcriptText: document.getElementById('transcriptText'),
+            errorMessage: document.getElementById('errorMessage'),
+            waveformLoading: document.getElementById('waveformLoading')
+        };
         
         // Initialize
         init();
         
         function init() {
+            // Ensure WaveSurfer is loaded before initializing
+            if (typeof WaveSurfer === 'undefined') {
+                // Retry after a short delay
+                setTimeout(init, 100);
+                return;
+            }
+            
+            initializeWaveSurfer();
             renderAudioList();
             setupEventListeners();
             
@@ -374,8 +329,92 @@ export class AudioPlayerManager {
             }
         }
         
+        function initializeWaveSurfer() {
+            try {
+                if (typeof WaveSurfer === 'undefined') {
+                    throw new Error('WaveSurfer library not loaded');
+                }
+                
+                wavesurfer = WaveSurfer.create({
+                    container: '#waveform',
+                    waveColor: 'rgba(54, 162, 235, 0.8)',
+                    progressColor: 'rgba(34, 134, 58, 1)',
+                    cursorColor: 'rgba(255, 193, 7, 1)',
+                    barWidth: 2,
+                    barRadius: 3,
+                    responsive: true,
+                    height: 80,
+                    normalize: true,
+                    backend: 'WebAudio',
+                    mediaControls: false,
+                    interact: true,
+                    hideScrollbar: false
+                });
+
+                // Plugins are not included in the basic CommonJS build
+                // Timeline and minimap functionality can be added later with separate plugin files
+                console.log('WaveSurfer initialized without plugins');
+
+                setupWaveSurferEvents();
+                
+            } catch (error) {
+                console.error('Failed to initialize WaveSurfer:', error);
+                showError('Failed to initialize audio player: ' + error.message);
+            }
+        }
+        
+        function setupWaveSurferEvents() {
+            wavesurfer.on('ready', () => {
+                elements.waveformLoading.style.display = 'none';
+                elements.playPauseBtn.disabled = false;
+                updateTimeDisplay();
+            });
+            
+            wavesurfer.on('loading', (percent) => {
+                elements.waveformLoading.textContent = \`Loading waveform... \${percent}%\`;
+                elements.waveformLoading.style.display = 'flex';
+            });
+            
+            wavesurfer.on('play', () => {
+                isPlaying = true;
+                updatePlayPauseButton();
+                elements.playingIndicator.style.display = 'inline-flex';
+            });
+            
+            wavesurfer.on('pause', () => {
+                isPlaying = false;
+                updatePlayPauseButton();
+                elements.playingIndicator.style.display = 'none';
+            });
+            
+            wavesurfer.on('finish', () => {
+                isPlaying = false;
+                updatePlayPauseButton();
+                elements.playingIndicator.style.display = 'none';
+                onAudioEnded();
+            });
+            
+            wavesurfer.on('timeupdate', () => {
+                updateTimeDisplay();
+            });
+            
+            wavesurfer.on('error', (error) => {
+                console.error('WaveSurfer error:', error);
+                showError('Audio playback error: ' + (error.message || error));
+                elements.waveformLoading.style.display = 'none';
+            });
+            
+            wavesurfer.on('load', () => {
+                console.log('WaveSurfer: Audio loaded successfully');
+            });
+            
+            wavesurfer.on('decode', () => {
+                console.log('WaveSurfer: Audio decoded successfully');
+            });
+        }
+        
         function renderAudioList() {
-            audioList.innerHTML = '';
+            elements.audioList.innerHTML = '';
             
             audios.forEach(audio => {
                 const item = document.createElement('div');
@@ -387,35 +426,52 @@ export class AudioPlayerManager {
                     <div class="audio-info">
                         <div class="audio-filename">\${audio.filename}</div>
                         <div class="audio-details">
-                            Duration: \${formatDuration(audio.duration)} | 
-                            Format: \${audio.format.toUpperCase()} | 
-                            Size: \${formatFileSize(getCurrentAudioSize(audio))}
+                            <span class="audio-detail-item">\${formatDuration(audio.duration)}</span>
+                            <span class="audio-detail-item">\${audio.format.toUpperCase()}</span>
                         </div>
                     </div>
                 \`;
                 
                 item.addEventListener('click', () => loadAudio(audio));
-                audioList.appendChild(item);
+                elements.audioList.appendChild(item);
             });
         }
         
         function setupEventListeners() {
-            playPauseBtn.addEventListener('click', togglePlayPause);
-            progressBar.addEventListener('click', seek);
-            speedSelector.addEventListener('change', changeSpeed);
-            volumeSlider.addEventListener('input', changeVolume);
+            elements.playPauseBtn.addEventListener('click', togglePlayPause);
+            elements.speedSelector.addEventListener('change', changeSpeed);
+            elements.volumeSlider.addEventListener('input', changeVolume);
+            elements.zoomInBtn.addEventListener('click', () => wavesurfer && wavesurfer.zoom(wavesurfer.params.minPxPerSec * 1.5));
+            elements.zoomOutBtn.addEventListener('click', () => wavesurfer && wavesurfer.zoom(wavesurfer.params.minPxPerSec * 0.75));
             
-            audioElement.addEventListener('loadedmetadata', updateDisplay);
-            audioElement.addEventListener('timeupdate', updateProgress);
-            audioElement.addEventListener('ended', onAudioEnded);
-            audioElement.addEventListener('play', () => { isPlaying = true; updatePlayPauseButton(); });
-            audioElement.addEventListener('pause', () => { isPlaying = false; updatePlayPauseButton(); });
+            // Keyboard shortcuts
+            document.addEventListener('keydown', (e) => {
+                if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+                
+                switch (e.code) {
+                    case 'Space':
+                        e.preventDefault();
+                        togglePlayPause();
+                        break;
+                    case 'ArrowLeft':
+                        e.preventDefault();
+                        if (wavesurfer) wavesurfer.skip(-5);
+                        break;
+                    case 'ArrowRight':
+                        e.preventDefault();
+                        if (wavesurfer) wavesurfer.skip(5);
+                        break;
+                }
+            });
         }
         
         function loadAudio(audio) {
             currentAudio = audio;
-            audioElement.src = audio.uri;
-            currentAudioTitle.textContent = audio.filename;
+            elements.currentAudioTitle.textContent = audio.filename;
+            elements.waveformLoading.style.display = 'flex';
+            elements.waveformLoading.textContent = 'Loading waveform...';
+            elements.playPauseBtn.disabled = true;
+            hideError();
             
             // Update active state in list
             document.querySelectorAll('.audio-item').forEach(item => {
@@ -424,70 +480,89 @@ export class AudioPlayerManager {
             
             // Show/hide transcript
             if (audio.transcript) {
-                transcriptText.textContent = audio.transcript;
-                transcript.style.display = 'block';
+                elements.transcriptText.textContent = audio.transcript;
+                elements.transcript.style.display = 'block';
             } else {
-                transcript.style.display = 'none';
+                elements.transcript.style.display = 'none';
             }
             
-            updateDisplay();
+            // Load audio in WaveSurfer
+            if (wavesurfer) {
+                try {
+                    // Use dataUrl if available, otherwise fall back to uri
+                    const audioSource = audio.dataUrl || audio.uri;
+                    console.log('Loading audio source:', audioSource ? 'dataUrl' : 'uri');
+                    wavesurfer.load(audioSource);
+                } catch (error) {
+                    console.error('Failed to load audio:', error);
+                    showError('Failed to load audio file: ' + error.message);
+                }
+            }
         }
         
         function togglePlayPause() {
-            if (!currentAudio) return;
+            if (!wavesurfer || !currentAudio) return;
             
-            if (isPlaying) {
-                audioElement.pause();
-            } else {
-                audioElement.play();
+            try {
+                wavesurfer.playPause();
+            } catch (error) {
+                console.error('Playback error:', error);
+                showError('Playback error: ' + error.message);
             }
         }
         
-        function seek(event) {
-            if (!currentAudio) return;
-            
-            const rect = progressBar.getBoundingClientRect();
-            const percent = (event.clientX - rect.left) / rect.width;
-            audioElement.currentTime = percent * audioElement.duration;
-        }
-        
         function changeSpeed() {
-            audioElement.playbackRate = parseFloat(speedSelector.value);
+            if (!wavesurfer) return;
+            const rate = parseFloat(elements.speedSelector.value);
+            try {
+                wavesurfer.setPlaybackRate(rate);
+            } catch (error) {
+                console.error('Speed change error:', error);
+            }
         }
         
         function changeVolume() {
-            audioElement.volume = parseInt(volumeSlider.value) / 100;
+            if (!wavesurfer) return;
+            const volume = parseInt(elements.volumeSlider.value) / 100;
+            try {
+                wavesurfer.setVolume(volume);
+                updateVolumeIcon(volume);
+            } catch (error) {
+                console.error('Volume change error:', error);
+            }
         }
         
-        function updateDisplay() {
-            if (!currentAudio) return;
-            
-            const current = formatTime(audioElement.currentTime || 0);
-            const total = formatTime(audioElement.duration || currentAudio.duration);
-            timeDisplay.textContent = \`\${current} / \${total}\`;
+        function updateVolumeIcon(volume) {
+            if (volume === 0) {
+                elements.volumeIcon.textContent = '🔇';
+            } else if (volume < 0.5) {
+                elements.volumeIcon.textContent = '🔉';
+            } else {
+                elements.volumeIcon.textContent = '🔊';
+            }
         }
         
-        function updateProgress() {
-            if (!audioElement.duration) return;
+        function updateTimeDisplay() {
+            if (!wavesurfer || !currentAudio) return;
             
-            const percent = (audioElement.currentTime / audioElement.duration) * 100;
-            progressFill.style.width = percent + '%';
-            updateDisplay();
+            const current = formatTime(wavesurfer.getCurrentTime() || 0);
+            const total = formatTime(wavesurfer.getDuration() || currentAudio.duration);
+            elements.timeDisplay.textContent = \`\${current} / \${total}\`;
         }
         
         function updatePlayPauseButton() {
-            playPauseBtn.textContent = isPlaying ? '⏸' : '▶';
+            elements.playPauseBtn.textContent = isPlaying ? '⏸' : '▶';
+            elements.playPauseBtn.setAttribute('aria-label', isPlaying ? 'Pause' : 'Play');
         }
         
         function onAudioEnded() {
-            isPlaying = false;
-            updatePlayPauseButton();
-            
             // Auto-play next audio if available
             const currentIndex = audios.findIndex(a => a.id === currentAudio.id);
             if (currentIndex < audios.length - 1) {
                 loadAudio(audios[currentIndex + 1]);
-                audioElement.play();
+                setTimeout(() => {
+                    if (wavesurfer) wavesurfer.play();
+                }, 100);
             }
         }
         
@@ -502,17 +577,13 @@ export class AudioPlayerManager {
             return formatTime(seconds);
         }
         
-        function formatFileSize(bytes) {
-            if (bytes === 0) return '0 B';
-            const k = 1024;
-            const sizes = ['B', 'KB', 'MB'];
-            const i = Math.floor(Math.log(bytes) / Math.log(k));
-            return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+        function showError(message) {
+            elements.errorMessage.textContent = message;
+            elements.errorMessage.style.display = 'block';
         }
         
-        function getCurrentAudioSize(audio) {
-            // This would need to be passed from the extension
-            return 0; // Placeholder
+        function hideError() {
+            elements.errorMessage.style.display = 'none';
         }
         
         // Handle messages from extension
@@ -536,5 +607,17 @@ export class AudioPlayerManager {
     </script>
 </body>
 </html>`;
+  }
+
+  /**
+   * Generate a random nonce for CSP
+   */
+  private getNonce(): string {
+    let text = '';
+    const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    for (let i = 0; i < 32; i++) {
+      text += possible.charAt(Math.floor(Math.random() * possible.length));
+    }
+    return text;
   }
 }
