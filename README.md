@@ -1,6 +1,6 @@
 # CodeTour Enhanced 🚀🗺️
 
-**An enhanced VS Code extension with advanced audio recording, improved image galleries, and activity bar integration for guided codebase tours.**
+**An enhanced VS Code extension with advanced audio recording, improved image galleries, PlantUML diagrams, and activity bar integration for guided codebase tours.**
 
 [![Version](https://img.shields.io/badge/version-0.60.0-blue.svg)](https://github.com/mahmutsalman/codetour-enhanced)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE.txt)
@@ -9,25 +9,63 @@
 
 CodeTour Enhanced is a significantly improved version of Microsoft's popular CodeTour extension, featuring powerful new capabilities for creating immersive, multimedia code walkthroughs directly within Visual Studio Code.
 
-### 🔥 Enhanced Features
+## 🖼️ Visual Showcase
+
+See CodeTour Enhanced in action with rich multimedia features:
+
+### 📊 Dedicated Activity Bar Integration
+![Activity Bar Integration](docs/screenshots/activity-bar-icon.png)
+
+*CodeTour Enhanced features a dedicated icon in VS Code's activity bar (highlighted in yellow) for easy access to tour management*
+
+### 🎵 Professional Audio with WaveSurfer.js
+![Audio Waveform](docs/screenshots/waveform-example.png)
+
+*Advanced audio player with real-time waveform visualization, playback controls, and speed adjustment*
+
+### 🖼️ Rich Image Galleries
+![Image Gallery](docs/screenshots/example-gallery.png)
+
+*Enhanced image gallery system with navigation controls and seamless integration within tour steps*
+
+### 🖼️ Images Within Tour Comments
+![Images in CodeTour](docs/screenshots/plantuml-inside-codetour-comment-example.png)
+
+*Images and diagrams displayed directly within CodeTour comments for enhanced documentation*
+
+![Full-Screen Image View](docs/screenshots/uml-diagram-example.png)
+
+*Images can be viewed in full-screen mode for detailed inspection*
+
+## 🔥 Enhanced Features
 
 **🎵 Advanced Audio Recording System**
 - Professional audio recording with WaveSurfer.js integration
-- Real-time waveform visualization
-- Intelligent device selection and silence detection
-- Audio transcript management
-- Seamless VSIX bundling and playback
+- Real-time waveform visualization and playback controls
+- Speed adjustment (0.5x to 2x) for different learning paces
+- Multiple audio tracks per tour step
+- High-quality WAV format support
+- Audio timeline navigation
 
 **🖼️ Improved Image Gallery**
-- Dynamic image layout with responsive design
-- Enhanced image display sizing and formatting
-- Clipboard integration for quick image additions
-- Professional image management interface
+- Full-screen image gallery with navigation (2/2 indicator)
+- Keyboard navigation support (← → keys, ESC to close)
+- Support for clipboard images and file uploads
+- Professional image viewer with zoom and pan
+- Image management and organization tools
+
+**🖼️ Enhanced Image Display**
+- Images displayed directly within tour comments
+- Full-screen image viewer for detailed inspection
+- Support for various image formats (PNG, JPG, diagrams)
+- Seamless integration with tour step documentation
+- Professional image rendering within VS Code interface
 
 **📊 Activity Bar Integration**  
-- Dedicated CodeTour sidebar in the activity bar
+- Dedicated CodeTour sidebar in VS Code's activity bar
 - Streamlined tour management and navigation
-- Enhanced user experience and accessibility
+- Quick access to recording and editing tools
+- Enhanced tour organization and filtering
 
 **⚡ Performance & Quality Improvements**
 - Optimized VSIX bundling and loading
@@ -66,55 +104,58 @@ This project is based on Microsoft's excellent **[CodeTour extension](https://gi
 ### Audio Recording Features
 
 #### Professional Audio Capture
-- High-quality audio recording with noise reduction
-- Real-time audio level monitoring
-- Automatic silence detection and trimming
-- Multiple audio format support
+- Crystal-clear WAV format recording with high fidelity
+- WaveSurfer.js powered audio player with real-time waveform visualization
+- Playback speed control (0.5x, 1x, 1.5x, 2x) for optimal learning pace
+- Professional audio controls with play/pause, timeline scrubbing, and volume
 
-#### WaveSurfer.js Integration
-```javascript
-// Enhanced audio visualization
-const wavesurfer = WaveSurfer.create({
-  container: '#waveform',
-  waveColor: '#4A90E2',
-  progressColor: '#357ABD',
-  cursorColor: '#357ABD'
-});
-```
+#### Advanced Audio Interface
+The audio player features:
+- **Visual Waveform**: Real-time green waveform display for audio visualization
+- **Playback Controls**: Professional play/pause, timeline navigation
+- **Speed Control**: Adjustable playback speed for different learning preferences  
+- **Audio Library**: Manage multiple audio files per tour step
+- **High Quality**: WAV format ensures crystal-clear audio quality
 
 #### Audio Management
-- Transcript editing and management
-- Audio file organization per tour step
-- Bulk audio operations
-- Export capabilities
+- Multiple audio tracks per tour step (as shown: audio-1756649127992.wav, audio-1756649439624.wav)
+- Organized audio library with file duration and format display
+- Seamless integration within VS Code's interface
+- Professional audio player modal with full controls
 
 ### Image Gallery Enhancements
 
-#### Dynamic Layout System
-- Responsive grid layout
-- Automatic image sizing optimization
-- Touch-friendly mobile interface
-- Drag-and-drop functionality
+#### Full-Screen Gallery Experience
+- **Professional Image Viewer**: Full-screen modal with navigation (2/2 indicator)
+- **Keyboard Navigation**: Use ← → arrow keys to navigate, ESC to close
+- **Image Support**: Display various image types including diagrams and screenshots
+- **High-Resolution Display**: Crystal-clear rendering of complex diagrams and images
 
 #### Advanced Image Handling
-- Clipboard integration: `Ctrl+V` to paste images
-- Multiple format support: PNG, JPG, GIF, WebP
-- Image compression and optimization
-- Caption and metadata management
+- **Multiple Format Support**: PNG, JPG, GIF, WebP, and diagram images
+- **Clipboard Integration**: Quick image additions from clipboard (clipboard-image-1756652529934.png)  
+- **Professional Navigation**: Intuitive gallery controls with image counter and close button
+- **Comment Integration**: Images displayed directly within tour step comments
+
+#### Enhanced Image Display
+- **In-Comment Viewing**: Images rendered directly within CodeTour comments
+- **Full-Screen Mode**: Click images for detailed full-screen inspection
+- **Professional Presentation**: Clean, integrated display within VS Code interface
+- **Documentation Enhancement**: Visual aids seamlessly integrated with text explanations
 
 ### Activity Bar Integration
 
-#### Dedicated Sidebar
-- Centralized tour management
-- Enhanced navigation controls  
-- Quick access to recording tools
-- Tour organization and filtering
+#### Dedicated VS Code Integration
+- **Activity Bar Icon**: Dedicated CodeTour Enhanced icon in VS Code's activity bar (highlighted position)
+- **Easy Access**: Single-click access to all tour management features
+- **Native Integration**: Seamlessly integrated with VS Code's native UI patterns
+- **Professional Placement**: Positioned among other essential VS Code tools
 
-#### Improved UX
-- Context-sensitive actions
-- Keyboard shortcuts integration
-- Accessible design patterns
-- Dark/light theme support
+#### Enhanced Tour Management
+- **Centralized Control**: All tour creation, editing, and playback from one location
+- **Quick Actions**: Fast access to recording, editing, and navigation tools
+- **Tour Organization**: Comprehensive tour library management
+- **Visual Feedback**: Clear visual indicators for active tours and recording state
 
 ## 🛠️ Development
 
@@ -153,9 +194,18 @@ npm run package
   "codetour.customTourDirectory": null,
   "codetour.audioQuality": "high",
   "codetour.imageMaxSize": "2MB",
-  "codetour.activityBarEnabled": true
+  "codetour.activityBarEnabled": true,
+  "codetour.waveSurferEnabled": true,
+  "codetour.galleryNavigation": "keyboard",
+  "codetour.audioSpeedControl": true
 }
 ```
+
+#### New Configuration Options
+
+- **`waveSurferEnabled`**: Enable/disable WaveSurfer.js audio visualization (default: true)
+- **`galleryNavigation`**: Control image gallery navigation method ("keyboard", "buttons", "both")
+- **`audioSpeedControl`**: Enable playback speed adjustment controls (default: true)
 
 ## 🤝 Contributing
 
