@@ -425,9 +425,9 @@ export function registerRecorderCommands() {
         const fileEditors = vscode.window.visibleTextEditors.filter(
           editor => editor.document && editor.document.uri.scheme === "file"
         );
-        const contents = fileEditors?.[0]?.document
+        const contents = thread.range ? fileEditors?.[0]?.document
           .lineAt(thread.range.start.line)
-          .text.trim();
+          .text.trim() : undefined;
 
         const pattern =
           "^[^\\S\\n]*" + contents!.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -442,10 +442,10 @@ export function registerRecorderCommands() {
           step.pattern = pattern;
         } else {
           // TODO: Try to get smarter about how to handle this.
-          step.line = thread.range.start.line + 1;
+          step.line = thread.range ? thread.range.start.line + 1 : 1;
         }
       } else {
-        step.line = thread.range.start.line + 1;
+        step.line = thread.range ? thread.range.start.line + 1 : 1;
       }
 
       store.activeTour!.step++;

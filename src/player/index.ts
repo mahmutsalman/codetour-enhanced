@@ -226,7 +226,9 @@ let controller: CommentController | null;
 
 export async function focusPlayer() {
   const currentThread = store.activeTour!.thread!;
-  showDocument(currentThread.uri, currentThread.range);
+  if (currentThread.range) {
+    showDocument(currentThread.uri, currentThread.range);
+  }
 }
 
 export async function startPlayer() {
