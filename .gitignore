@@ -57,3 +57,6 @@ temp/
 
 # Local development resources (not tracked)
 localResources/
+
+# VSIX packaging configuration (not tracked)
+.vscodeignore

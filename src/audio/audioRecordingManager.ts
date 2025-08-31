@@ -53,48 +53,47 @@ export class AudioRecordingManager {
   }
 
   /**
-   * Detects macOS audio devices using ffmpeg AVFoundation
+   * Detects macOS audio devices using Sox CoreAudio
    */
   private async detectMacOSDevices(): Promise<AudioDevice[]> {
     try {
-      const output = await this.executeCommandWithStderr('ffmpeg -f avfoundation -list_devices true -i ""');
+      // Use sox to list CoreAudio devices
+      const output = await this.executeCommandWithStderr('sox -V6 -n -t coreaudio junkname');
       const devices: AudioDevice[] = [];
       const lines = output.split('\n');
       
-      console.log('Raw ffmpeg output:', output); // Debug logging
+      console.log('Raw sox CoreAudio output:', output); // Debug logging
       
-      let inAudioSection = false;
       for (const line of lines) {
-        if (line.includes('AVFoundation audio devices:')) {
-          inAudioSection = true;
-          continue;
-        }
-        
-        if (inAudioSection && line.includes('[') && line.includes(']')) {
-          const match = line.match(/\[(\d+)\]\s+(.+)/);
+        // Parse lines like: sox INFO coreaudio: Found Audio Device "MacBook Pro Microphone"
+        if (line.includes('Found Audio Device')) {
+          const match = line.match(/Found Audio Device "([^"]+)"/);
           if (match) {
-            const index = parseInt(match[1]);
-            const name = match[2].trim();
+            const name = match[1];
             const type = this.classifyMacOSDevice(name);
-            devices.push({ index, name, type });
-            console.log(`Found device: ${index} - ${name} (${type})`); // Debug logging
+            
+            // Only add microphone/input devices for recording
+            if (type === 'microphone' || name.toLowerCase().includes('input') || name.toLowerCase().includes('microphone')) {
+              devices.push({ index: devices.length, name, type: 'microphone' });
+              console.log(`Found microphone device: ${name}`); // Debug logging
+            }
           }
         }
       }
       
-      // Fallback: if no devices found but we know they exist, add known devices
+      // Fallback: Add common macOS devices if detection fails
       if (devices.length === 0) {
-        console.warn('No devices detected from ffmpeg output, using fallback devices');
-        devices.push({ index: 0, name: 'ZoomAudioDevice', type: 'virtual' });
+        console.warn('No microphone devices detected from sox output, using fallback devices');
+        devices.push({ index: 0, name: 'default', type: 'microphone' });
         devices.push({ index: 1, name: 'MacBook Pro Microphone', type: 'microphone' });
       }
       
       return devices;
     } catch (error) {
       console.warn('Failed to detect macOS audio devices:', error);
-      // Return fallback devices based on your system output
+      // Return fallback devices 
       return [
-        { index: 0, name: 'ZoomAudioDevice', type: 'virtual' },
+        { index: 0, name: 'default', type: 'microphone' },
         { index: 1, name: 'MacBook Pro Microphone', type: 'microphone' }
       ];
     }
@@ -253,17 +252,42 @@ export class AudioRecordingManager {
     
     try {
       if (platform === 'darwin') {
-        // macOS: Check for ffmpeg
-        await this.executeCommand('which ffmpeg');
-        return true;
+        // macOS: Check for sox (primary) or ffmpeg (fallback)
+        try {
+          await this.executeCommand('which sox');
+          return true;
+        } catch (soxError) {
+          console.log('Sox not found, checking for ffmpeg fallback:', soxError);
+          try {
+            await this.executeCommand('which ffmpeg');
+            return true;
+          } catch (ffmpegError) {
+            console.log('Neither sox nor ffmpeg found:', ffmpegError);
+            return false;
+          }
+        }
       } else if (platform === 'win32') {
-        // Windows: Check for ffmpeg
-        await this.executeCommand('where ffmpeg');
-        return true;
+        // Windows: Check for sox or ffmpeg
+        try {
+          await this.executeCommand('where sox');
+          return true;
+        } catch (soxError) {
+          try {
+            await this.executeCommand('where ffmpeg');
+            return true;
+          } catch (ffmpegError) {
+            return false;
+          }
+        }
       } else {
-        // Linux: Check for arecord (ALSA)
-        await this.executeCommand('which arecord');
-        return true;
+        // Linux: Check for sox or arecord (ALSA)
+        try {
+          await this.executeCommand('which sox');
+          return true;
+        } catch (soxError) {
+          await this.executeCommand('which arecord');
+          return true;
+        }
       }
     } catch (error) {
       console.log('Recording tools not found:', error);
@@ -280,14 +304,14 @@ export class AudioRecordingManager {
     let installCommand = '';
 
     if (platform === 'darwin') {
-      installMessage = 'Audio recording requires FFmpeg. Would you like to install it?';
-      installCommand = 'brew install ffmpeg';
+      installMessage = 'Audio recording requires Sox (recommended) or FFmpeg. Would you like to install Sox?';
+      installCommand = 'brew install sox';
     } else if (platform === 'win32') {
-      installMessage = 'Audio recording requires FFmpeg. Please install it from https://ffmpeg.org/download.html';
-      installCommand = 'Download from https://ffmpeg.org/download.html and add to PATH';
+      installMessage = 'Audio recording requires Sox or FFmpeg. Please install Sox for best quality.';
+      installCommand = 'Download Sox from https://sourceforge.net/projects/sox/';
     } else {
-      installMessage = 'Audio recording requires ALSA utilities. Would you like to install them?';
-      installCommand = 'sudo apt-get install alsa-utils';
+      installMessage = 'Audio recording requires Sox or ALSA utilities. Sox is recommended for best quality.';
+      installCommand = 'sudo apt-get install sox';
     }
 
     const action = await vscode.window.showErrorMessage(
@@ -305,15 +329,27 @@ export class AudioRecordingManager {
   }
 
   /**
-   * Starts system-level audio recording
+   * Starts system-level audio recording using Sox (primary) or FFmpeg (fallback)
    */
   private async startSystemRecording(): Promise<void> {
     const platform = process.platform;
-    const tempDir = path.join(__dirname, '..', '..', 'temp');
     
-    // Ensure temp directory exists
-    if (!fs.existsSync(tempDir)) {
-      fs.mkdirSync(tempDir, { recursive: true });
+    // Use workspace or OS temp directory for recordings
+    const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+    const tempDir = workspaceRoot 
+      ? path.join(workspaceRoot, '.tours', 'temp')
+      : path.join(require('os').tmpdir(), 'codetour-recordings');
+    
+    // Ensure temp directory exists with proper error handling
+    try {
+      if (!fs.existsSync(tempDir)) {
+        fs.mkdirSync(tempDir, { recursive: true });
+        console.log(`Created temp directory: ${tempDir}`);
+      }
+    } catch (error) {
+      console.error('Failed to create temp directory:', error);
+      vscode.window.showErrorMessage(`Failed to create recording directory: ${error}`);
+      return;
     }
 
     const timestamp = Date.now();
@@ -323,40 +359,85 @@ export class AudioRecordingManager {
       let recordingArgs: string[] = [];
       let command = '';
 
+      // Try Sox first (crystal-clear quality), fallback to FFmpeg if needed
+      const hasSox = await this.checkForSox();
+      
       if (platform === 'darwin') {
-        // macOS: Use ffmpeg with AVFoundation
-        command = 'ffmpeg';
-        recordingArgs = [
-          '-f', 'avfoundation',
-          '-i', `:${this.selectedDeviceIndex}`,  // Use selected audio device
-          '-acodec', 'pcm_s16le',
-          '-ar', '44100',
-          '-ac', '1',  // Use mono for better compatibility
-          '-y',  // Overwrite output file
-          tempFilePath
-        ];
+        if (hasSox) {
+          // macOS: Use Sox with CoreAudio (crystal-clear quality)
+          command = 'sox';
+          const deviceName = this.getSelectedDeviceName();
+          recordingArgs = [
+            '-t', 'coreaudio',           // macOS audio system
+            deviceName,                  // Selected device name (input)
+            '-r', '48000',              // 48kHz sample rate
+            '-b', '24',                 // 24-bit depth
+            '-c', '1',                  // Mono channel
+            tempFilePath,               // Output file (must come after input settings)
+            'compand', '0.3,1', '6:-70,-60,-20', '-5', '-90', '0.2'  // Dynamic range compression
+          ];
+        } else {
+          // Fallback to FFmpeg with improved settings
+          command = 'ffmpeg';
+          recordingArgs = [
+            '-f', 'avfoundation',
+            '-i', `:${this.selectedDeviceIndex}`,
+            '-acodec', 'pcm_s16le',
+            '-ar', '44100',
+            '-ac', '1',
+            '-y',
+            tempFilePath
+          ];
+        }
       } else if (platform === 'win32') {
-        // Windows: Use ffmpeg with DirectShow
-        command = 'ffmpeg';
-        recordingArgs = [
-          '-f', 'dshow',
-          '-i', 'audio="Microphone"',
-          '-acodec', 'pcm_s16le',
-          '-ar', '44100',
-          '-ac', '2',
-          '-y',
-          tempFilePath
-        ];
+        if (hasSox) {
+          // Windows: Use Sox
+          command = 'sox';
+          recordingArgs = [
+            '-d',                       // Default device (input)
+            '-r', '48000',             // Sample rate
+            '-b', '24',                // Bit depth
+            '-c', '1',                 // Channels
+            tempFilePath,              // Output file (after input settings)
+            'compand', '0.3,1', '6:-70,-60,-20', '-5', '-90', '0.2'
+          ];
+        } else {
+          // Fallback to FFmpeg
+          command = 'ffmpeg';
+          recordingArgs = [
+            '-f', 'dshow',
+            '-i', 'audio="Microphone"',
+            '-acodec', 'pcm_s16le',
+            '-ar', '44100',
+            '-ac', '2',
+            '-y',
+            tempFilePath
+          ];
+        }
       } else {
-        // Linux: Use arecord
-        command = 'arecord';
-        recordingArgs = [
-          '-f', 'cd',  // CD quality (16-bit, 44.1kHz, stereo)
-          '-t', 'wav',
-          tempFilePath
-        ];
+        if (hasSox) {
+          // Linux: Use Sox
+          command = 'sox';
+          recordingArgs = [
+            '-d',                       // Default device (input)
+            '-r', '48000',             // Sample rate
+            '-b', '24',                // Bit depth
+            '-c', '1',                 // Channels
+            tempFilePath,              // Output file (after input settings)
+            'compand', '0.3,1', '6:-70,-60,-20', '-5', '-90', '0.2'
+          ];
+        } else {
+          // Fallback to arecord
+          command = 'arecord';
+          recordingArgs = [
+            '-f', 'cd',
+            '-t', 'wav',
+            tempFilePath
+          ];
+        }
       }
 
+      console.log(`Starting recording with: ${command} ${recordingArgs.join(' ')}`);
       const recordingProcess = spawn(command, recordingArgs);
       
       this.recordingProcess = {
@@ -367,7 +448,17 @@ export class AudioRecordingManager {
 
       // Set up status bar
       this.createStatusBarItem();
-      this.updateStatusBar('Recording...', true);
+      this.updateStatusBar(`Recording (${hasSox ? 'Sox' : 'Fallback'})...`, true);
+
+      recordingProcess.stderr?.on('data', (data) => {
+        const errorOutput = data.toString();
+        console.log('Recording stderr:', errorOutput);
+        
+        // Monitor for common issues
+        if (errorOutput.includes('Permission denied') || errorOutput.includes('Device busy')) {
+          console.warn('Recording permission/device issue:', errorOutput);
+        }
+      });
 
       recordingProcess.on('error', (error) => {
         console.error('Recording process error:', error);
@@ -375,8 +466,9 @@ export class AudioRecordingManager {
         this.cleanup();
       });
 
+      const recordingTool = hasSox ? 'Sox (Crystal-clear quality!)' : 'Fallback mode';
       vscode.window.showInformationMessage(
-        '🎤 Recording started! Click the status bar or press ESC to stop.',
+        `🎤 Recording started with ${recordingTool} Click to stop.`,
         'Stop Recording'
       ).then(action => {
         if (action === 'Stop Recording') {
@@ -388,6 +480,35 @@ export class AudioRecordingManager {
       console.error('Failed to start recording:', error);
       vscode.window.showErrorMessage(`Failed to start recording: ${error}`);
     }
+  }
+
+  /**
+   * Checks if Sox is available on the system
+   */
+  private async checkForSox(): Promise<boolean> {
+    const platform = process.platform;
+    try {
+      if (platform === 'win32') {
+        await this.executeCommand('where sox');
+      } else {
+        await this.executeCommand('which sox');
+      }
+      return true;
+    } catch (error) {
+      console.log('Sox not available:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Gets the selected device name for Sox
+   */
+  private getSelectedDeviceName(): string {
+    if (this.availableDevices.length > 0 && this.selectedDeviceIndex >= 0) {
+      const device = this.availableDevices.find(d => d.index === this.selectedDeviceIndex);
+      return device?.name || 'default';
+    }
+    return 'default';
   }
 
   /**
