@@ -1,0 +1,16 @@
+<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Tour path/route -->
+  <path d="M3 12 L8 7 L15 14 L21 8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  
+  <!-- Tour stops/steps -->
+  <circle cx="3" cy="12" r="2" fill="currentColor"/>
+  <circle cx="8" cy="7" r="2" fill="currentColor"/>
+  <circle cx="15" cy="14" r="2" fill="currentColor"/>
+  <circle cx="21" cy="8" r="2" fill="currentColor"/>
+  
+  <!-- Step numbers -->
+  <text x="3" y="12" text-anchor="middle" dominant-baseline="middle" fill="white" font-size="8" font-family="Arial, sans-serif">1</text>
+  <text x="8" y="7" text-anchor="middle" dominant-baseline="middle" fill="white" font-size="8" font-family="Arial, sans-serif">2</text>
+  <text x="15" y="14" text-anchor="middle" dominant-baseline="middle" fill="white" font-size="8" font-family="Arial, sans-serif">3</text>
+  <text x="21" y="8" text-anchor="middle" dominant-baseline="middle" fill="white" font-size="8" font-family="Arial, sans-serif">4</text>
+</svg>
