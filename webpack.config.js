@@ -1,5 +1,6 @@
 const path = require("path");
 const webpack = require("webpack");
+const CopyWebpackPlugin = require("copy-webpack-plugin");
 
 const config = {
   entry: "./src/extension.ts",
@@ -37,6 +38,14 @@ const config = {
       noSources: false,
       module: true,
       columns: true
+    }),
+    new CopyWebpackPlugin({
+      patterns: [
+        {
+          from: path.resolve(__dirname, 'src/audio/assets/player.css'),
+          to: 'assets/player.css'
+        }
+      ]
     })
   ]
 };

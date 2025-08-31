@@ -151,11 +151,8 @@ export class AudioPlayerManager {
     }
 
     return {
-      wavesurferJs: webview.asWebviewUri(
-        vscode.Uri.joinPath(extensionUri, 'src', 'audio', 'assets', 'wavesurfer.js')
-      ),
       playerCss: webview.asWebviewUri(
-        vscode.Uri.joinPath(extensionUri, 'src', 'audio', 'assets', 'player.css')
+        vscode.Uri.joinPath(extensionUri, 'dist', 'assets', 'player.css')
       )
     };
   }
@@ -183,7 +180,7 @@ export class AudioPlayerManager {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Content-Security-Policy" content="default-src 'none'; 
-          script-src ${this.panel?.webview.cspSource} 'nonce-${nonce}'; 
+          script-src ${this.panel?.webview.cspSource} 'nonce-${nonce}' https://unpkg.com; 
           style-src ${this.panel?.webview.cspSource} 'unsafe-inline'; 
           media-src ${this.panel?.webview.cspSource} data: blob:; 
           connect-src ${this.panel?.webview.cspSource} https: data: blob:;">
@@ -274,16 +271,8 @@ export class AudioPlayerManager {
         </div>
     </div>
 
-    <script nonce="${nonce}">
-        // Module wrapper for CommonJS in browser context
-        window.module = {exports: {}};
-        window.exports = window.module.exports;
-    </script>
-    <script nonce="${nonce}" src="${resources.wavesurferJs}"></script>
-    <script nonce="${nonce}">
-        // Make WaveSurfer globally available after CommonJS export
-        window.WaveSurfer = window.module.exports;
-    </script>
+    <!-- Load WaveSurfer from CDN for better VSIX compatibility -->
+    <script nonce="${nonce}" src="https://unpkg.com/wavesurfer.js@7.10.1/dist/wavesurfer.min.js"></script>
     <script nonce="${nonce}">
         let audios = ${JSON.stringify(audioList)};
         let currentAudio = null;
@@ -312,13 +301,15 @@ export class AudioPlayerManager {
         init();
         
         function init() {
-            // Ensure WaveSurfer is loaded before initializing
+            // Ensure WaveSurfer is loaded from CDN before initializing
             if (typeof WaveSurfer === 'undefined') {
+                console.log('Waiting for WaveSurfer to load from CDN...');
                 // Retry after a short delay
                 setTimeout(init, 100);
                 return;
             }
             
+            console.log('WaveSurfer loaded successfully, version:', WaveSurfer.VERSION || 'unknown');
             initializeWaveSurfer();
             renderAudioList();
             setupEventListeners();

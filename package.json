@@ -816,6 +816,7 @@
     "@types/throttle-debounce": "^5.0.0",
     "@types/vscode": "^1.60",
     "@vscode/vsce": "^2.17.0",
+    "copy-webpack-plugin": "^13.0.1",
     "debug": "^4.3.4",
     "eslint": "^8.34.0",
     "ts-loader": "^9.4.2",
