@@ -733,11 +733,20 @@
         }
       ]
     },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "codetour",
+          "title": "CodeTour",
+          "icon": "images/codetour-icon.svg"
+        }
+      ]
+    },
     "views": {
-      "explorer": [
+      "codetour": [
         {
           "id": "codetour.tours",
-          "name": "CodeTour",
+          "name": "Tours",
           "when": "workspaceFolderCount != 0 || codetour:inTour"
         }
       ]

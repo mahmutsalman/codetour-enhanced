@@ -10,4 +10,3 @@ webpack.config.js
 **/*.vsix
 .git/**
 .github/**
-**/*.svg
