@@ -21,7 +21,7 @@ import {
   window,
   workspace
 } from "vscode";
-import { SMALL_ICON_URL } from "../constants";
+import { SMALL_ICON_URL, IMAGE_DISPLAY } from "../constants";
 import { CodeTour, CodeTourStep, store } from "../store";
 import { initializeStorage } from "../store/storage";
 import {
@@ -98,7 +98,7 @@ function generateAudioGallery(step: CodeTourStep): string {
 }
 
 /**
- * Generates image gallery markdown for a tour step
+ * Generates image gallery with standardized sizing for a tour step
  */
 function generateImageGallery(step: CodeTourStep): string {
   if (!step.images || step.images.length === 0) {
@@ -113,27 +113,30 @@ function generateImageGallery(step: CodeTourStep): string {
     if (!workspaceFolder) continue;
     
     const imageUri = Uri.joinPath(workspaceFolder.uri, image.path);
-    const thumbnailUri = image.thumbnail 
-      ? Uri.joinPath(workspaceFolder.uri, image.thumbnail)
-      : imageUri;
     
-    // Create thumbnail with clickable link to full image
-    galleryContent += `[![${image.filename}](${thumbnailUri.toString()})](command:codetour.viewImage?${encodeURIComponent(JSON.stringify([image.path]))} "${image.filename}")`;
+    // Create a clickable image with size constraints using HTML
+    galleryContent += `<div style="border: 1px solid #454545; border-radius: 6px; padding: 8px; margin: 8px 0; max-width: ${IMAGE_DISPLAY.DEFAULT_MAX_WIDTH + 20}px;">`;
+    galleryContent += `<a href="command:codetour.viewImage?${encodeURIComponent(JSON.stringify([image.path]))}" title="Click to view full size">`;
+    galleryContent += `<img src="${imageUri.toString()}" alt="${image.filename}" style="max-width: ${IMAGE_DISPLAY.DEFAULT_MAX_WIDTH}px; max-height: ${IMAGE_DISPLAY.DEFAULT_MAX_HEIGHT}px; width: auto; height: auto; object-fit: contain; border-radius: 4px; display: block;" />`;
+    galleryContent += `</a>`;
     
     // Add filename and caption
-    galleryContent += `  \n**${image.filename}**`;
+    galleryContent += `<div style="margin-top: 8px; font-size: 0.9em;">`;
+    galleryContent += `<div style="font-weight: bold;">${image.filename}</div>`;
     if (image.caption) {
-      galleryContent += `  \n*${image.caption}*`;
+      galleryContent += `<div style="font-style: italic; color: #888; margin-top: 4px;">${image.caption}</div>`;
     }
     
     // Add image management commands for editing mode
     if (store.isRecording && store.isEditing) {
       const removeArgs = encodeURIComponent(JSON.stringify([image.id]));
       const captionArgs = encodeURIComponent(JSON.stringify([image.id]));
-      galleryContent += `  \n[$(edit) Edit Caption](command:codetour.updateImageCaption?${captionArgs}) | [$(trash) Remove](command:codetour.removeImage?${removeArgs})`;
+      galleryContent += `<div style="margin-top: 8px; font-size: 0.85em;">`;
+      galleryContent += `<a href="command:codetour.updateImageCaption?${captionArgs}">$(edit) Edit Caption</a> | <a href="command:codetour.removeImage?${removeArgs}">$(trash) Remove</a>`;
+      galleryContent += `</div>`;
     }
     
-    galleryContent += "\n\n";
+    galleryContent += `</div></div>\n\n`;
   }
   
   return galleryContent;
@@ -214,6 +217,8 @@ export class CodeTourComment implements Comment {
 
     this.body = new MarkdownString(body);
     this.body.isTrusted = true;
+    // @ts-ignore - supportHtml exists but not in type definitions
+    this.body.supportHtml = true;
   }
 }
 

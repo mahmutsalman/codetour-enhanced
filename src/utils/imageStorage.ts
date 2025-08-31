@@ -8,7 +8,7 @@ import { getActiveWorkspacePath } from "../utils";
 
 const IMAGES_FOLDER = ".tours/images";
 const THUMBNAIL_PREFIX = "thumb-";
-const THUMBNAIL_SIZE = 150; // 150x150 pixels
+const THUMBNAIL_SIZE = 400; // 400x400 pixels for comment display
 
 /**
  * Generates the image storage path for a specific tour and step
@@ -196,15 +196,14 @@ async function getImageDimensions(imageData: Uint8Array): Promise<{width: number
 
 /**
  * Generates a thumbnail for an image
- * This is a placeholder implementation - can be enhanced with proper image processing
+ * Simple implementation that copies original - size control handled at display level
  */
 async function generateThumbnail(
   imageData: Uint8Array,
   thumbnailUri: Uri,
   size: number
 ): Promise<void> {
-  // For now, just copy the original image as thumbnail
-  // TODO: Implement proper thumbnail generation with resize
+  // For VS Code extensions, we'll copy the original and handle sizing at display level
   await workspace.fs.writeFile(thumbnailUri, imageData);
 }
 
