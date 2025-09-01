@@ -3,7 +3,7 @@
   "displayName": "CodeTour Enhanced",
   "description": "Enhanced VS Code extension with audio recording, improved image gallery, and activity bar integration for guided codebase tours. Based on Microsoft's CodeTour.",
   "publisher": "mahmutsalman",
-  "version": "0.60.0",
+  "version": "0.60.1",
   "author": {
     "name": "Mahmut Salman",
     "email": "mahmut.salman@example.com"
