@@ -798,6 +798,12 @@
         "when": "!textInputFocus && !terminalFocus",
         "key": "ctrl+up ctrl+up",
         "mac": "cmd+up cmd+up"
+      },
+      {
+        "command": "codetour.stopAudioRecording",
+        "when": "!textInputFocus && !terminalFocus",
+        "key": "ctrl+shift+s",
+        "mac": "cmd+shift+s"
       }
     ],
     "languages": [

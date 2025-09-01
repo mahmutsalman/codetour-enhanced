@@ -29,6 +29,7 @@ export class AudioRecordingManager {
   private statusBarItem: vscode.StatusBarItem | null = null;
   private availableDevices: AudioDevice[] = [];
   private selectedDeviceIndex: number = -1;
+  private recordingTimer: NodeJS.Timeout | null = null;
 
   public static getInstance(): AudioRecordingManager {
     if (!AudioRecordingManager.instance) {
@@ -455,9 +456,9 @@ export class AudioRecordingManager {
         startTime: Date.now()
       };
 
-      // Set up status bar
+      // Set up status bar and start timer
       this.createStatusBarItem();
-      this.updateStatusBar(`Recording (${hasSox ? 'Sox' : 'Fallback'})...`, true);
+      this.startRecordingTimer(hasSox);
 
       recordingProcess.stderr?.on('data', (data) => {
         const errorOutput = data.toString();
@@ -475,15 +476,8 @@ export class AudioRecordingManager {
         this.cleanup();
       });
 
-      const recordingTool = hasSox ? 'Sox (Crystal-clear quality!)' : 'Fallback mode';
-      vscode.window.showInformationMessage(
-        `🎤 Recording started with ${recordingTool} Click to stop.`,
-        'Stop Recording'
-      ).then(action => {
-        if (action === 'Stop Recording') {
-          this.stopRecording();
-        }
-      });
+      // Show persistent recording notification
+      this.showPersistentRecordingNotification(hasSox);
 
     } catch (error) {
       console.error('Failed to start recording:', error);
@@ -604,14 +598,108 @@ export class AudioRecordingManager {
   }
 
   /**
+   * Shows a persistent recording notification that doesn't auto-dismiss
+   */
+  private showPersistentRecordingNotification(hasSox: boolean): void {
+    const recordingTool = hasSox ? 'Sox' : 'Fallback mode';
+    
+    // Create a progress notification that won't auto-dismiss
+    vscode.window.withProgress({
+      location: vscode.ProgressLocation.Notification,
+      title: `🎤 Recording started with ${recordingTool}`,
+      cancellable: true
+    }, async (progress, token) => {
+      let timeElapsed = 0;
+      
+      // Initial progress message
+      progress.report({ 
+        message: `Recording in progress... 00:00 | Click status bar or Cancel to stop`
+      });
+      
+      // Update progress every 5 seconds to keep it alive
+      const progressInterval = setInterval(() => {
+        if (!this.recordingProcess) {
+          clearInterval(progressInterval);
+          return;
+        }
+        
+        timeElapsed += 5;
+        const minutes = Math.floor(timeElapsed / 60);
+        const seconds = timeElapsed % 60;
+        const timeStr = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+        
+        progress.report({ 
+          message: `Recording in progress... ${timeStr} | Click status bar or Cancel to stop`
+        });
+      }, 5000);
+      
+      // Handle cancellation
+      token.onCancellationRequested(() => {
+        clearInterval(progressInterval);
+        this.stopRecording();
+      });
+      
+      // Keep the notification open until recording stops
+      return new Promise<void>((resolve) => {
+        const checkRecording = () => {
+          if (!this.recordingProcess) {
+            clearInterval(progressInterval);
+            resolve();
+          } else {
+            setTimeout(checkRecording, 1000);
+          }
+        };
+        checkRecording();
+      });
+    });
+  }
+
+  /**
+   * Starts the recording timer to update status bar with elapsed time
+   */
+  private startRecordingTimer(hasSox: boolean): void {
+    if (!this.recordingProcess) return;
+    
+    const recordingTool = hasSox ? 'Sox' : 'Fallback';
+    
+    // Update immediately
+    this.updateStatusBar(`🎤 Recording with ${recordingTool} - 00:00 - Click to STOP`, true);
+    
+    // Update every second
+    this.recordingTimer = setInterval(() => {
+      if (!this.recordingProcess) {
+        this.stopRecordingTimer();
+        return;
+      }
+      
+      const elapsed = Date.now() - this.recordingProcess.startTime;
+      const minutes = Math.floor(elapsed / 60000);
+      const seconds = Math.floor((elapsed % 60000) / 1000);
+      const timeStr = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+      
+      this.updateStatusBar(`🎤 Recording with ${recordingTool} - ${timeStr} - Click to STOP`, true);
+    }, 1000);
+  }
+
+  /**
+   * Stops the recording timer
+   */
+  private stopRecordingTimer(): void {
+    if (this.recordingTimer) {
+      clearInterval(this.recordingTimer);
+      this.recordingTimer = null;
+    }
+  }
+
+  /**
    * Updates status bar display
    */
   private updateStatusBar(text: string, isRecording: boolean): void {
     if (!this.statusBarItem) return;
     
-    this.statusBarItem.text = `$(${isRecording ? 'record' : 'mic'}) ${text}`;
+    this.statusBarItem.text = text;
     this.statusBarItem.tooltip = isRecording 
-      ? 'Click to stop recording (Ctrl+Shift+P → CodeTour: Stop Recording)'
+      ? 'Click to stop recording or press Ctrl+Shift+P → CodeTour: Stop Recording'
       : 'Audio recording';
   }
 
@@ -619,6 +707,9 @@ export class AudioRecordingManager {
    * Cleans up recording resources
    */
   private cleanup(): void {
+    // Stop the recording timer
+    this.stopRecordingTimer();
+    
     if (this.recordingProcess) {
       // Clean up temp file
       try {
