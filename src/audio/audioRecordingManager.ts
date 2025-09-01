@@ -72,10 +72,14 @@ export class AudioRecordingManager {
             const name = match[1];
             const type = this.classifyMacOSDevice(name);
             
-            // Only add microphone/input devices for recording
+            console.log(`Debug: Device "${name}" classified as "${type}"`); // Debug logging
+            
+            // Add all microphone devices and any device that explicitly has microphone/input in name
             if (type === 'microphone' || name.toLowerCase().includes('input') || name.toLowerCase().includes('microphone')) {
               devices.push({ index: devices.length, name, type: 'microphone' });
-              console.log(`Found microphone device: ${name}`); // Debug logging
+              console.log(`✅ Added microphone device: ${name} (type: ${type})`); // Debug logging
+            } else {
+              console.log(`❌ Skipped device: ${name} (type: ${type})`); // Debug logging
             }
           }
         }
@@ -105,8 +109,13 @@ export class AudioRecordingManager {
   private classifyMacOSDevice(name: string): 'microphone' | 'virtual' | 'system' {
     const lowerName = name.toLowerCase();
     
-    // Physical microphones
-    if (lowerName.includes('microphone') || lowerName.includes('built-in')) {
+    // Physical microphones - including external, USB, and built-in
+    if (lowerName.includes('microphone') || 
+        lowerName.includes('built-in') ||
+        (lowerName.includes('external') && lowerName.includes('microphone')) ||
+        lowerName.includes('usb') ||
+        lowerName.includes('input') ||
+        lowerName.includes('mic')) {
       return 'microphone';
     }
     
@@ -678,9 +687,10 @@ export class AudioRecordingManager {
       });
       
       process.on('close', (code) => {
-        // For device listing, ffmpeg returns exit code 1 but still provides device info
-        // So we accept both 0 and 1 for device detection
-        if (code === 0 || code === 1) {
+        // For device listing, sox returns exit code 2 (can't open dummy device) but still provides device info
+        // FFmpeg returns exit code 1 but still provides device info
+        // So we accept 0, 1, and 2 for device detection
+        if (code === 0 || code === 1 || code === 2) {
           resolve(output.trim());
         } else {
           reject(new Error(`Command failed with code ${code}`));
