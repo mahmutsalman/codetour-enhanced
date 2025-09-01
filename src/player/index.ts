@@ -429,11 +429,9 @@ async function renderCurrentStep() {
     }
   }
 
-  // Add audio and image galleries only when not in editing mode
-  if (!store.isEditing) {
-    content += generateAudioGallery(step);
-    content += generateImageGallery(step);
-  }
+  // Always show media galleries (controls will appear when editing)
+  content += generateAudioGallery(step);
+  content += generateImageGallery(step);
 
   const comment = new CodeTourComment(
     content,
