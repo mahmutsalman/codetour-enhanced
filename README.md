@@ -1,8 +1,8 @@
 # CodeTour Enhanced 🚀🗺️
 
-**An enhanced VS Code extension with advanced audio recording, improved image galleries, PlantUML diagrams, and activity bar integration for guided codebase tours.**
+**An enhanced VS Code extension with advanced audio recording, zoomable image galleries, tour sorting & filtering, PlantUML diagrams, and activity bar integration for guided codebase tours.**
 
-[![Version](https://img.shields.io/badge/version-0.60.0-blue.svg)](https://github.com/mahmutsalman/codetour-enhanced)
+[![Version](https://img.shields.io/badge/version-0.61.0-blue.svg)](https://github.com/mahmutsalman/codetour-enhanced)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE.txt)
 
 ## 🎯 About
@@ -47,25 +47,33 @@ See CodeTour Enhanced in action with rich multimedia features:
 - High-quality WAV format support
 - Audio timeline navigation
 
-**🖼️ Improved Image Gallery**
-- Full-screen image gallery with navigation (2/2 indicator)
-- Keyboard navigation support (← → keys, ESC to close)
-- Support for clipboard images and file uploads
-- Professional image viewer with zoom and pan
-- Image management and organization tools
+**🗂️ Advanced Tour Management** ⭐ *NEW in v0.61.0*
+- **8 Sorting Modes**: Name (A-Z/Z-A), Creation Date, Last Modified, Step Count
+- **Real-time Filtering**: Instant text search across tour names and descriptions
+- **Persistent Preferences**: Your sort and filter settings are remembered across VS Code sessions
+- **Professional UI**: Integrated toolbar buttons and Command Palette access
+- **Smart Organization**: Perfect for managing large collections of tours
+
+**🖼️ Interactive Image Gallery** ⭐ *ENHANCED in v0.61.0*
+- **Full Zoom Support**: Mouse wheel + Ctrl/Cmd, pinch-to-zoom, zoom buttons (50%-500%)
+- **Click & Drag Panning**: Navigate around zoomed images with smooth interactions
+- **Compact Comment Display**: Images now display at 250x200px for better UX
+- **Full-screen Navigation**: Professional viewer with keyboard shortcuts (+, -, 0)
+- **Trackpad Gestures**: Native support for pinch and pan gestures
+- **Visual Feedback**: Real-time zoom level indicator and smooth animations
 
 **🖼️ Enhanced Image Display**
-- Images displayed directly within tour comments
-- Full-screen image viewer for detailed inspection
+- Images displayed directly within tour comments (now more compact)
+- Full-screen zoomable viewer for detailed inspection
 - Support for various image formats (PNG, JPG, diagrams)
 - Seamless integration with tour step documentation
 - Professional image rendering within VS Code interface
 
 **📊 Activity Bar Integration**  
 - Dedicated CodeTour sidebar in VS Code's activity bar
-- Streamlined tour management and navigation
+- Streamlined tour management with advanced sorting and filtering
 - Quick access to recording and editing tools
-- Enhanced tour organization and filtering
+- Enhanced tour organization for large codebases
 
 **⚡ Performance & Quality Improvements**
 - Optimized VSIX bundling and loading
