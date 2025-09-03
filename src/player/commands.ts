@@ -6,7 +6,7 @@ import * as vscode from "vscode";
 import { EXTENSION_NAME } from "../constants";
 import { focusPlayer } from "../player";
 import { saveTour } from "../recorder/commands";
-import { CodeTour, store } from "../store";
+import { CodeTour, store, TourSortMode } from "../store";
 import {
   endCurrentCodeTour,
   exportTour,
@@ -290,4 +290,83 @@ export function registerPlayerCommands() {
   vscode.commands.registerCommand(`${EXTENSION_NAME}.resetProgress`, () =>
     progress.reset()
   );
+
+  // Tour sorting and filtering commands
+  vscode.commands.registerCommand(`${EXTENSION_NAME}.sortTours`, async () => {
+    const sortOptions: vscode.QuickPickItem[] = [
+      { label: "$(symbol-text) Name (A-Z)", description: "Sort tours alphabetically", detail: "name-asc" },
+      { label: "$(symbol-text) Name (Z-A)", description: "Sort tours reverse alphabetically", detail: "name-desc" },
+      { label: "$(calendar) Created Date (Newest)", description: "Sort by creation date (newest first)", detail: "created-desc" },
+      { label: "$(calendar) Created Date (Oldest)", description: "Sort by creation date (oldest first)", detail: "created-asc" },
+      { label: "$(history) Updated Date (Newest)", description: "Sort by last modified date (newest first)", detail: "updated-desc" },
+      { label: "$(history) Updated Date (Oldest)", description: "Sort by last modified date (oldest first)", detail: "updated-asc" },
+      { label: "$(list-ordered) Step Count (Ascending)", description: "Sort by number of steps (least first)", detail: "steps-asc" },
+      { label: "$(list-ordered) Step Count (Descending)", description: "Sort by number of steps (most first)", detail: "steps-desc" }
+    ];
+
+    const currentSort = store.tourSortMode;
+    const currentOption = sortOptions.find(option => option.detail === currentSort);
+    if (currentOption) {
+      currentOption.label += " $(check)";
+    }
+
+    const selected = await vscode.window.showQuickPick(sortOptions, {
+      placeHolder: "Choose how to sort tours",
+      matchOnDescription: true
+    });
+
+    if (selected && selected.detail) {
+      store.tourSortMode = selected.detail as TourSortMode;
+      
+      // Store user preference asynchronously to avoid triggering config reload
+      setTimeout(() => {
+        vscode.workspace.getConfiguration("codetour").update(
+          "tourSortMode", 
+          selected.detail, 
+          vscode.ConfigurationTarget.Global
+        );
+      }, 100);
+    }
+  });
+
+  vscode.commands.registerCommand(`${EXTENSION_NAME}.filterTours`, async () => {
+    const pattern = await vscode.window.showInputBox({
+      prompt: "Enter text to filter tours by name (leave empty to clear filter)",
+      value: store.tourFilter.pattern || "",
+      placeHolder: "e.g., 'intro' or 'setup'"
+    });
+
+    if (pattern !== undefined) {
+      if (pattern.trim()) {
+        store.tourFilter = {
+          pattern: pattern.trim(),
+          isActive: true
+        };
+      } else {
+        store.tourFilter = { isActive: false };
+      }
+      
+      // Store user preference asynchronously to avoid triggering config reload
+      setTimeout(() => {
+        vscode.workspace.getConfiguration("codetour").update(
+          "tourFilter", 
+          store.tourFilter, 
+          vscode.ConfigurationTarget.Global
+        );
+      }, 100);
+    }
+  });
+
+  vscode.commands.registerCommand(`${EXTENSION_NAME}.clearTourFilter`, () => {
+    store.tourFilter = { isActive: false };
+    
+    // Store user preference asynchronously to avoid triggering config reload
+    setTimeout(() => {
+      vscode.workspace.getConfiguration("codetour").update(
+        "tourFilter", 
+        { isActive: false }, 
+        vscode.ConfigurationTarget.Global
+      );
+    }, 100);
+  });
 }

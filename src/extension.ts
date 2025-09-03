@@ -99,6 +99,56 @@ export async function activate(context: vscode.ExtensionContext) {
       // Don't let gallery errors break the extension
     }
 
+    // Initialize tour sorting and filtering preferences
+    const initializePreferences = () => {
+      const config = vscode.workspace.getConfiguration("codetour");
+      const savedSortMode = config.get("tourSortMode", "name-asc");
+      const savedFilter = config.get("tourFilter", { isActive: false });
+      
+      // Set initial values without triggering watchers
+      store.tourSortMode = savedSortMode as any;
+      store.tourFilter = savedFilter as any;
+
+      // Set up context for UI elements
+      vscode.commands.executeCommand(
+        "setContext", 
+        "codetour:hasActiveFilter", 
+        store.tourFilter.isActive
+      );
+    };
+
+    // Initialize preferences after a short delay to avoid conflicts with tour discovery
+    setTimeout(initializePreferences, 200);
+
+    // Watch for external configuration changes (not our own updates)
+    let configUpdateInProgress = false;
+    context.subscriptions.push(
+      vscode.workspace.onDidChangeConfiguration(e => {
+        if (configUpdateInProgress) return;
+        
+        if (e.affectsConfiguration("codetour.tourSortMode") || e.affectsConfiguration("codetour.tourFilter")) {
+          configUpdateInProgress = true;
+          setTimeout(() => {
+            const config = vscode.workspace.getConfiguration("codetour");
+            if (e.affectsConfiguration("codetour.tourSortMode")) {
+              const newSortMode = config.get("tourSortMode", "name-asc");
+              store.tourSortMode = newSortMode as any;
+            }
+            if (e.affectsConfiguration("codetour.tourFilter")) {
+              const newFilter = config.get("tourFilter", { isActive: false });
+              store.tourFilter = newFilter as any;
+              vscode.commands.executeCommand(
+                "setContext", 
+                "codetour:hasActiveFilter", 
+                store.tourFilter.isActive
+              );
+            }
+            configUpdateInProgress = false;
+          }, 50);
+        }
+      })
+    );
+
     const uriHandler = new URIHandler();
     context.subscriptions.push(vscode.window.registerUriHandler(uriHandler));
 

@@ -57,7 +57,6 @@ export async function discoverTours(): Promise<void> {
   runInAction(() => {
     store.tours = tours
       .flat()
-      .sort((a, b) => a.title.localeCompare(b.title))
       .filter(tour => !tour.when || jexl.evalSync(tour.when, TOUR_CONTEXT));
 
     if (store.activeTour) {
@@ -96,6 +95,29 @@ async function discoverMainTours(
         const mainTourContent = await readUriContents(uri);
         const tour = JSON.parse(mainTourContent);
         tour.id = decodeURIComponent(uri.toString());
+        
+        // Extract file metadata if not present in the tour
+        if (!tour.createdAt || !tour.updatedAt) {
+          try {
+            const fileStat = await vscode.workspace.fs.stat(uri);
+            if (!tour.createdAt) {
+              tour.createdAt = fileStat.ctime;
+            }
+            if (!tour.updatedAt) {
+              tour.updatedAt = fileStat.mtime;
+            }
+          } catch {
+            // If we can't get file stats, use current time as fallback
+            const now = Date.now();
+            if (!tour.createdAt) {
+              tour.createdAt = now;
+            }
+            if (!tour.updatedAt) {
+              tour.updatedAt = now;
+            }
+          }
+        }
+        
         return tour;
       } catch {}
     })
@@ -134,6 +156,29 @@ async function readTourFile(
     const tourContent = await readUriContents(tourUri);
     const tour = JSON.parse(tourContent);
     tour.id = decodeURIComponent(tourUri.toString());
+    
+    // Extract file metadata if not present in the tour
+    if (!tour.createdAt || !tour.updatedAt) {
+      try {
+        const fileStat = await vscode.workspace.fs.stat(tourUri);
+        if (!tour.createdAt) {
+          tour.createdAt = fileStat.ctime;
+        }
+        if (!tour.updatedAt) {
+          tour.updatedAt = fileStat.mtime;
+        }
+      } catch {
+        // If we can't get file stats, use current time as fallback
+        const now = Date.now();
+        if (!tour.createdAt) {
+          tour.createdAt = now;
+        }
+        if (!tour.updatedAt) {
+          tour.updatedAt = now;
+        }
+      }
+    }
+    
     return tour;
   } catch {}
 }

@@ -13,7 +13,7 @@ import {
 } from "vscode";
 import { EXTENSION_NAME } from "../../constants";
 import { generatePreviewContent } from "..";
-import { store } from "../../store";
+import { store, CodeTour } from "../../store";
 import { CodeTourNode, CodeTourStepNode } from "./nodes";
 
 class CodeTourTreeProvider implements TreeDataProvider<TreeItem>, Disposable {
@@ -23,12 +23,57 @@ class CodeTourTreeProvider implements TreeDataProvider<TreeItem>, Disposable {
   public readonly onDidChangeTreeData: Event<TreeItem | undefined> = this
     ._onDidChangeTreeData.event;
 
+  private sortTours(tours: CodeTour[]): CodeTour[] {
+    const sorted = [...tours];
+    
+    switch (store.tourSortMode) {
+      case "name-asc":
+        return sorted.sort((a, b) => a.title.localeCompare(b.title));
+      case "name-desc":
+        return sorted.sort((a, b) => b.title.localeCompare(a.title));
+      case "created-asc":
+        return sorted.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+      case "created-desc":
+        return sorted.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+      case "updated-asc":
+        return sorted.sort((a, b) => (a.updatedAt || 0) - (b.updatedAt || 0));
+      case "updated-desc":
+        return sorted.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+      case "steps-asc":
+        return sorted.sort((a, b) => a.steps.length - b.steps.length);
+      case "steps-desc":
+        return sorted.sort((a, b) => b.steps.length - a.steps.length);
+      default:
+        return sorted;
+    }
+  }
+
+  private filterTours(tours: CodeTour[]): CodeTour[] {
+    if (!store.tourFilter.isActive || !store.tourFilter.pattern) {
+      return tours;
+    }
+
+    const pattern = store.tourFilter.pattern.toLowerCase();
+    return tours.filter(tour => 
+      tour.title.toLowerCase().includes(pattern) ||
+      (tour.description && tour.description.toLowerCase().includes(pattern))
+    );
+  }
+
+  private processTours(tours: CodeTour[]): CodeTour[] {
+    const filtered = this.filterTours(tours);
+    return this.sortTours(filtered);
+  }
+
   constructor(private extensionPath: string) {
     reaction(
       () => [
         store.tours,
         store.hasTours,
         store.isRecording,
+        store.tourSortMode,
+        store.tourFilter.isActive,
+        store.tourFilter.pattern,
         store.progress.map(([id, completedSteps]) => [
           id,
           completedSteps.map(step => step)
@@ -58,20 +103,23 @@ class CodeTourTreeProvider implements TreeDataProvider<TreeItem>, Disposable {
       if (!store.hasTours && !store.activeTour) {
         return undefined;
       } else {
-        const tours = store.tours.map(
-          tour => new CodeTourNode(tour, this.extensionPath)
-        );
+        // Start with all tours
+        let allTours = [...store.tours];
 
+        // Add active tour if it's not in the list
         if (
           store.activeTour &&
           !store.tours.find(tour => tour.id === store.activeTour?.tour.id)
         ) {
-          tours.unshift(
-            new CodeTourNode(store.activeTour.tour, this.extensionPath)
-          );
+          allTours.unshift(store.activeTour.tour);
         }
 
-        return tours;
+        // Apply filtering and sorting
+        const processedTours = this.processTours(allTours);
+
+        return processedTours.map(
+          tour => new CodeTourNode(tour, this.extensionPath)
+        );
       }
     } else if (element instanceof CodeTourNode) {
       if (element.tour.steps.length === 0) {

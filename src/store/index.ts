@@ -74,6 +74,8 @@ export interface CodeTour {
   nextTour?: string;
   stepMarker?: string;
   when?: string;
+  createdAt?: number;
+  updatedAt?: number;
 }
 
 export interface ActiveTour {
@@ -100,6 +102,21 @@ export interface ActiveTour {
 type CodeTourProgress = [string, number[]];
 export type CodeTourStepTuple = [CodeTour, CodeTourStep, number, number?];
 
+export type TourSortMode = 
+  | "name-asc" 
+  | "name-desc" 
+  | "created-asc" 
+  | "created-desc" 
+  | "updated-asc" 
+  | "updated-desc" 
+  | "steps-asc" 
+  | "steps-desc";
+
+export interface TourFilter {
+  pattern?: string;
+  isActive: boolean;
+}
+
 export interface Store {
   tours: CodeTour[];
   activeTour: ActiveTour | null;
@@ -109,6 +126,8 @@ export interface Store {
   isEditing: boolean;
   showMarkers: boolean;
   progress: CodeTourProgress[];
+  tourSortMode: TourSortMode;
+  tourFilter: TourFilter;
 }
 
 export const store: Store = observable({
@@ -120,5 +139,7 @@ export const store: Store = observable({
     return this.tours.length > 0;
   },
   showMarkers: false,
-  progress: []
+  progress: [],
+  tourSortMode: "name-asc",
+  tourFilter: { isActive: false }
 });

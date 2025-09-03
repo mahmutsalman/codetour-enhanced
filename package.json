@@ -75,6 +75,26 @@
           "type": "string",
           "default": null,
           "description": "Specifies a custom location to use when discovering tours."
+        },
+        "codetour.tourSortMode": {
+          "type": "string",
+          "enum": [
+            "name-asc",
+            "name-desc", 
+            "created-asc",
+            "created-desc",
+            "updated-asc",
+            "updated-desc",
+            "steps-asc",
+            "steps-desc"
+          ],
+          "default": "name-asc",
+          "description": "Specifies how tours should be sorted in the tour list."
+        },
+        "codetour.tourFilter": {
+          "type": "object",
+          "default": { "isActive": false },
+          "description": "Specifies the current tour filter settings."
         }
       }
     },
@@ -329,6 +349,24 @@
         "title": "Add Audio from File",
         "category": "CodeTour Enhanced",
         "icon": "$(file-media)"
+      },
+      {
+        "command": "codetour.sortTours",
+        "title": "Sort Tours",
+        "category": "CodeTour Enhanced",
+        "icon": "$(list-ordered)"
+      },
+      {
+        "command": "codetour.filterTours",
+        "title": "Filter Tours",
+        "category": "CodeTour Enhanced",
+        "icon": "$(filter)"
+      },
+      {
+        "command": "codetour.clearTourFilter",
+        "title": "Clear Tour Filter",
+        "category": "CodeTour Enhanced",
+        "icon": "$(clear-all)"
       }
     ],
     "menus": {
@@ -596,6 +634,21 @@
           "command": "codetour.recordTour",
           "when": "view == codetour.tours",
           "group": "navigation@3"
+        },
+        {
+          "command": "codetour.sortTours",
+          "when": "view == codetour.tours",
+          "group": "navigation@4"
+        },
+        {
+          "command": "codetour.filterTours",
+          "when": "view == codetour.tours",
+          "group": "navigation@5"
+        },
+        {
+          "command": "codetour.clearTourFilter",
+          "when": "view == codetour.tours && codetour:hasActiveFilter",
+          "group": "navigation@6"
         }
       ],
       "view/item/context": [
