@@ -18,15 +18,15 @@ export const VSCODE_DIRECTORY = ".vscode";
 
 // Image display configuration for CodeTour comments
 export const IMAGE_DISPLAY = {
-  // Default max dimensions for images in comments
-  DEFAULT_MAX_WIDTH: 400,
-  DEFAULT_MAX_HEIGHT: 300,
+  // Default max dimensions for images in comments (reduced for better UX)
+  DEFAULT_MAX_WIDTH: 250,
+  DEFAULT_MAX_HEIGHT: 200,
   
   // Thumbnail dimensions for compact view
-  THUMBNAIL_WIDTH: 400,
-  THUMBNAIL_HEIGHT: 300,
+  THUMBNAIL_WIDTH: 250,
+  THUMBNAIL_HEIGHT: 200,
   
   // Small preview dimensions for inline display
-  SMALL_MAX_WIDTH: 200,
-  SMALL_MAX_HEIGHT: 150
+  SMALL_MAX_WIDTH: 150,
+  SMALL_MAX_HEIGHT: 120
 };

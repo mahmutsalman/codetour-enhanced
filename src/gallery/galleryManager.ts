@@ -313,6 +313,47 @@ export class GalleryManager {
       font-weight: bold;
     }
     
+    .zoom-controls {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    
+    .zoom-button {
+      background: var(--vscode-button-secondaryBackground);
+      color: var(--vscode-button-secondaryForeground);
+      border: 1px solid var(--vscode-button-border);
+      width: 32px;
+      height: 32px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
+    }
+    
+    .zoom-button:hover {
+      background: var(--vscode-button-secondaryHoverBackground);
+    }
+    
+    .zoom-button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    
+    .zoom-level {
+      background-color: var(--vscode-badge-background);
+      color: var(--vscode-badge-foreground);
+      padding: 4px 8px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: bold;
+      min-width: 40px;
+      text-align: center;
+    }
+    
     .close-button {
       background: none;
       border: none;
@@ -355,6 +396,19 @@ export class GalleryManager {
       object-fit: contain;
       border-radius: 8px;
       box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+      transition: transform 0.2s ease;
+      cursor: grab;
+      user-select: none;
+      -webkit-user-drag: none;
+    }
+    
+    .main-image.zoomed {
+      cursor: grab;
+    }
+    
+    .main-image.dragging {
+      cursor: grabbing;
+      transition: none;
     }
     
     .nav-button {
@@ -560,12 +614,18 @@ export class GalleryManager {
         <span>📎 Image Gallery</span>
         <span class="gallery-counter">${currentIndex + 1} / ${totalImages}</span>
       </div>
+      <div class="zoom-controls">
+        <button class="zoom-button" onclick="zoomOut()" title="Zoom Out (-)">−</button>
+        <span class="zoom-level" id="zoom-level">100%</span>
+        <button class="zoom-button" onclick="zoomIn()" title="Zoom In (+)">+</button>
+        <button class="zoom-button" onclick="resetZoom()" title="Reset Zoom (0)">⌂</button>
+      </div>
       <button class="close-button" onclick="closeGallery()" title="Close Gallery (Escape)">×</button>
     </div>
     
     <div class="gallery-main">
       <div class="image-container">
-        <img class="main-image" src="${imageUri}" alt="${currentImage.filename}" />
+        <img class="main-image" id="main-image" src="${imageUri}" alt="${currentImage.filename}" />
         
         ${totalImages > 1 ? `
           <button class="nav-button prev" onclick="previousImage()" title="Previous Image (← Arrow)">❮</button>
@@ -617,6 +677,55 @@ export class GalleryManager {
     
     function closeGallery() {
       vscode.postMessage({ type: 'close' });
+    }
+    
+    // Zoom functionality
+    let zoomLevel = 1;
+    let panX = 0;
+    let panY = 0;
+    const minZoom = 0.5;
+    const maxZoom = 5;
+    const zoomStep = 0.2;
+    
+    function updateImageTransform() {
+      const image = document.getElementById('main-image');
+      const zoomLevelElement = document.getElementById('zoom-level');
+      
+      image.style.transform = \`translate(\${panX}px, \${panY}px) scale(\${zoomLevel})\`;
+      zoomLevelElement.textContent = Math.round(zoomLevel * 100) + '%';
+      
+      // Update cursor based on zoom level
+      if (zoomLevel > 1) {
+        image.classList.add('zoomed');
+      } else {
+        image.classList.remove('zoomed');
+      }
+    }
+    
+    function zoomIn() {
+      if (zoomLevel < maxZoom) {
+        zoomLevel = Math.min(maxZoom, zoomLevel + zoomStep);
+        updateImageTransform();
+      }
+    }
+    
+    function zoomOut() {
+      if (zoomLevel > minZoom) {
+        zoomLevel = Math.max(minZoom, zoomLevel - zoomStep);
+        // Reset pan when zooming out to 1x or below
+        if (zoomLevel <= 1) {
+          panX = 0;
+          panY = 0;
+        }
+        updateImageTransform();
+      }
+    }
+    
+    function resetZoom() {
+      zoomLevel = 1;
+      panX = 0;
+      panY = 0;
+      updateImageTransform();
     }
     
     // Auto-scroll active thumbnail into view
@@ -672,6 +781,19 @@ export class GalleryManager {
           event.preventDefault();
           closeGallery();
           break;
+        case '+':
+        case '=':
+          event.preventDefault();
+          zoomIn();
+          break;
+        case '-':
+          event.preventDefault();
+          zoomOut();
+          break;
+        case '0':
+          event.preventDefault();
+          resetZoom();
+          break;
         case '1':
         case '2':
         case '3':
@@ -690,6 +812,101 @@ export class GalleryManager {
       }
     });
     
+    // Mouse wheel zoom functionality
+    const imageContainer = document.querySelector('.image-container');
+    imageContainer.addEventListener('wheel', (event) => {
+      // Only zoom with Ctrl/Cmd key
+      if (event.ctrlKey || event.metaKey) {
+        event.preventDefault();
+        
+        if (event.deltaY < 0) {
+          zoomIn();
+        } else {
+          zoomOut();
+        }
+      }
+    });
+    
+    // Drag to pan functionality
+    let isDragging = false;
+    let dragStartX, dragStartY;
+    let startPanX, startPanY;
+    
+    const mainImage = document.getElementById('main-image');
+    
+    mainImage.addEventListener('mousedown', (event) => {
+      if (zoomLevel > 1) {
+        event.preventDefault();
+        isDragging = true;
+        dragStartX = event.clientX;
+        dragStartY = event.clientY;
+        startPanX = panX;
+        startPanY = panY;
+        mainImage.classList.add('dragging');
+      }
+    });
+    
+    document.addEventListener('mousemove', (event) => {
+      if (isDragging && zoomLevel > 1) {
+        event.preventDefault();
+        const deltaX = event.clientX - dragStartX;
+        const deltaY = event.clientY - dragStartY;
+        
+        panX = startPanX + deltaX;
+        panY = startPanY + deltaY;
+        
+        updateImageTransform();
+      }
+    });
+    
+    document.addEventListener('mouseup', (event) => {
+      if (isDragging) {
+        event.preventDefault();
+        isDragging = false;
+        mainImage.classList.remove('dragging');
+      }
+    });
+    
+    // Touch/trackpad support
+    let initialPinchDistance = 0;
+    let initialZoomLevel = 1;
+    
+    imageContainer.addEventListener('touchstart', (event) => {
+      if (event.touches.length === 2) {
+        event.preventDefault();
+        const touch1 = event.touches[0];
+        const touch2 = event.touches[1];
+        initialPinchDistance = Math.sqrt(
+          Math.pow(touch2.clientX - touch1.clientX, 2) + 
+          Math.pow(touch2.clientY - touch1.clientY, 2)
+        );
+        initialZoomLevel = zoomLevel;
+      }
+    });
+    
+    imageContainer.addEventListener('touchmove', (event) => {
+      if (event.touches.length === 2) {
+        event.preventDefault();
+        const touch1 = event.touches[0];
+        const touch2 = event.touches[1];
+        const currentDistance = Math.sqrt(
+          Math.pow(touch2.clientX - touch1.clientX, 2) + 
+          Math.pow(touch2.clientY - touch1.clientY, 2)
+        );
+        
+        const scale = currentDistance / initialPinchDistance;
+        zoomLevel = Math.max(minZoom, Math.min(maxZoom, initialZoomLevel * scale));
+        updateImageTransform();
+      }
+    });
+    
+    // Prevent default touch behavior
+    imageContainer.addEventListener('touchend', (event) => {
+      if (event.touches.length < 2) {
+        initialPinchDistance = 0;
+      }
+    });
+    
     // Close on overlay click (outside image)
     document.querySelector('.gallery-overlay').addEventListener('click', (event) => {
       if (event.target.classList.contains('gallery-overlay') || 
@@ -697,6 +914,9 @@ export class GalleryManager {
         closeGallery();
       }
     });
+    
+    // Initialize zoom level display
+    updateImageTransform();
   </script>
 </body>
 </html>`;
