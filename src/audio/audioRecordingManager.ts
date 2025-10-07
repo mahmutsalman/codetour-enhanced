@@ -182,22 +182,42 @@ export class AudioRecordingManager {
     // Detect available audio devices
     try {
       this.availableDevices = await this.detectAudioDevices();
-      
+
       console.log(`Detected ${this.availableDevices.length} audio devices:`, this.availableDevices);
-      
+
       if (this.availableDevices.length === 0) {
         vscode.window.showErrorMessage("No audio devices detected. Please check your microphone connection.");
         return;
       }
 
-      // Show device selection if multiple devices or first time
-      await this.showDeviceSelection();
-      
+      // Check if a device was already selected (centralized selection logic)
+      if (this.selectedDeviceIndex !== -1) {
+        // Verify the previously selected device is still available
+        const deviceStillAvailable = this.availableDevices.some(d => d.index === this.selectedDeviceIndex);
+
+        if (deviceStillAvailable) {
+          const selectedDevice = this.availableDevices.find(d => d.index === this.selectedDeviceIndex);
+          console.log(`✅ Using previously selected device: ${selectedDevice?.name} (index: ${this.selectedDeviceIndex})`);
+          // Skip device selection dialog, use existing selection
+        } else {
+          console.warn(`⚠️ Previously selected device (index ${this.selectedDeviceIndex}) no longer available. Prompting for new selection.`);
+          vscode.window.showWarningMessage(
+            `Previously selected microphone is no longer available. Please select a different device.`
+          );
+          this.selectedDeviceIndex = -1; // Reset selection
+          await this.showDeviceSelection();
+        }
+      } else {
+        // No device selected yet, show selection dialog
+        console.log('📋 No device selected yet, showing device selection dialog');
+        await this.showDeviceSelection();
+      }
+
       if (this.selectedDeviceIndex === -1) {
         return; // User cancelled device selection
       }
 
-      console.log(`Selected device index: ${this.selectedDeviceIndex}`);
+      console.log(`🎤 Using device index: ${this.selectedDeviceIndex}`);
 
     } catch (error) {
       console.warn("Failed to detect audio devices, using default:", error);
