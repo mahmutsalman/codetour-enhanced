@@ -10,6 +10,7 @@ import { api, RefType } from "../git";
 import { CodeTourComment } from "../player";
 import { CodeTourNode, CodeTourStepNode } from "../player/tree/nodes";
 import { CodeTour, CodeTourStep, store } from "../store";
+import { stripGeneratedMediaSections } from "../utils/stepContent";
 import {
   EDITING_KEY,
   endCurrentCodeTour,
@@ -584,7 +585,8 @@ export function registerRecorderCommands() {
             : comment.body;
 
         const tourStep = store.activeTour!.tour!.steps[store.activeTour!.step];
-        tourStep.description = content;
+        const strippedContent = stripGeneratedMediaSections(content);
+        tourStep.description = strippedContent;
 
         const selection = getStepSelection();
         if (selection) {
