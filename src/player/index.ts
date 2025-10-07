@@ -39,6 +39,7 @@ import { registerFileSystemProvider } from "./fileSystem";
 import { registerTextDocumentContentProvider } from "./fileSystem/documentProvider";
 import { registerStatusBar } from "./status";
 import { registerTreeProvider } from "./tree";
+import { stripGeneratedMediaSections } from "../utils/stepContent";
 
 const CONTROLLER_ID = "codetour";
 const CONTROLLER_LABEL = "CodeTour";
@@ -373,7 +374,8 @@ async function renderCurrentStep() {
     store.isRecording && store.isEditing
       ? CommentMode.Editing
       : CommentMode.Preview;
-  let content = step.description;
+  const baseDescription = stripGeneratedMediaSections(step.description);
+  let content = baseDescription;
 
   let hasPreviousStep = currentStep > 0;
   const hasNextStep = currentStep < currentTour.steps.length - 1;
