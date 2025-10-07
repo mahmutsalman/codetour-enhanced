@@ -418,4 +418,20 @@ export function registerAudioCommands(context?: vscode.ExtensionContext) {
       }
     }
   );
+
+  /**
+   * Command: Select/Change microphone input device
+   */
+  vscode.commands.registerCommand(
+    `${EXTENSION_NAME}.selectMicrophone`,
+    async () => {
+      try {
+        const recorder = AudioRecordingManager.getInstance();
+        await recorder.selectMicrophone();
+      } catch (error) {
+        console.error("Failed to select microphone:", error);
+        vscode.window.showErrorMessage(`Failed to select microphone: ${error}`);
+      }
+    }
+  );
 }

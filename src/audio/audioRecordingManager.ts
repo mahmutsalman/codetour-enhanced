@@ -668,6 +668,52 @@ export class AudioRecordingManager {
   }
 
   /**
+   * Opens device selection dialog for user to choose microphone
+   * Can be called independently without starting recording
+   */
+  public async selectMicrophone(): Promise<void> {
+    try {
+      // Check if recording tools are available
+      const hasRecordingTool = await this.checkRecordingTools();
+      if (!hasRecordingTool) {
+        await this.showRecordingToolsInstallation();
+        return;
+      }
+
+      // Detect available audio devices
+      this.availableDevices = await this.detectAudioDevices();
+
+      console.log(`Detected ${this.availableDevices.length} audio devices for selection`);
+
+      if (this.availableDevices.length === 0) {
+        vscode.window.showErrorMessage("No audio devices detected. Please check your microphone connection.");
+        return;
+      }
+
+      // Show device selection with refresh capability
+      await this.showDeviceSelection();
+
+      if (this.selectedDeviceIndex === -1) {
+        // User cancelled
+        console.log('User cancelled microphone selection');
+        return;
+      }
+
+      // Show confirmation of selection
+      const selectedDevice = this.availableDevices.find(d => d.index === this.selectedDeviceIndex);
+      if (selectedDevice) {
+        vscode.window.showInformationMessage(
+          `✅ Microphone set to: ${selectedDevice.name}`
+        );
+        console.log(`Microphone selected: ${selectedDevice.name} (index: ${this.selectedDeviceIndex})`);
+      }
+    } catch (error) {
+      console.error('Failed to select microphone:', error);
+      vscode.window.showErrorMessage(`Failed to select microphone: ${error}`);
+    }
+  }
+
+  /**
    * Creates status bar item for recording control
    */
   private createStatusBarItem(): void {
