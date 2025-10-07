@@ -30,6 +30,7 @@ export class AudioRecordingManager {
   private availableDevices: AudioDevice[] = [];
   private selectedDeviceIndex: number = -1;
   private recordingTimer: NodeJS.Timeout | null = null;
+  private soxPath: string | null = null;
 
   public static getInstance(): AudioRecordingManager {
     if (!AudioRecordingManager.instance) {
@@ -58,8 +59,12 @@ export class AudioRecordingManager {
    */
   private async detectMacOSDevices(): Promise<AudioDevice[]> {
     try {
+      // Make sure we have sox path
+      await this.checkForSox();
+
       // Use sox to list CoreAudio devices
-      const output = await this.executeCommandWithStderr('sox -V6 -n -t coreaudio junkname');
+      const soxCmd = this.soxPath || 'sox';
+      const output = await this.executeCommandWithStderr(`"${soxCmd}" -V6 -n -t coreaudio junkname`);
       const devices: AudioDevice[] = [];
       const lines = output.split('\n');
       
@@ -258,49 +263,35 @@ export class AudioRecordingManager {
    * Checks if system recording tools are available
    */
   private async checkRecordingTools(): Promise<boolean> {
+    // Use the improved checkForSox method which checks common installation paths
+    const hasSox = await this.checkForSox();
+    if (hasSox) {
+      console.log('Recording tool detected: Sox');
+      return true;
+    }
+
+    // Fallback: check for ffmpeg or arecord in PATH
     const platform = process.platform;
-    
     try {
-      if (platform === 'darwin') {
-        // macOS: Check for sox (primary) or ffmpeg (fallback)
+      if (platform === 'win32') {
+        await this.executeCommand('where ffmpeg');
+        console.log('Recording tool detected: FFmpeg (fallback)');
+      } else if (platform === 'linux') {
+        // Try ffmpeg first, then arecord
         try {
-          await this.executeCommand('which sox');
-          return true;
-        } catch (soxError) {
-          console.log('Sox not found, checking for ffmpeg fallback:', soxError);
-          try {
-            await this.executeCommand('which ffmpeg');
-            return true;
-          } catch (ffmpegError) {
-            console.log('Neither sox nor ffmpeg found:', ffmpegError);
-            return false;
-          }
-        }
-      } else if (platform === 'win32') {
-        // Windows: Check for sox or ffmpeg
-        try {
-          await this.executeCommand('where sox');
-          return true;
-        } catch (soxError) {
-          try {
-            await this.executeCommand('where ffmpeg');
-            return true;
-          } catch (ffmpegError) {
-            return false;
-          }
+          await this.executeCommand('which ffmpeg');
+          console.log('Recording tool detected: FFmpeg (fallback)');
+        } catch {
+          await this.executeCommand('which arecord');
+          console.log('Recording tool detected: arecord (fallback)');
         }
       } else {
-        // Linux: Check for sox or arecord (ALSA)
-        try {
-          await this.executeCommand('which sox');
-          return true;
-        } catch (soxError) {
-          await this.executeCommand('which arecord');
-          return true;
-        }
+        await this.executeCommand('which ffmpeg');
+        console.log('Recording tool detected: FFmpeg (fallback)');
       }
+      return true;
     } catch (error) {
-      console.log('Recording tools not found:', error);
+      console.log('No recording tools found (sox, ffmpeg, or arecord)');
       return false;
     }
   }
@@ -373,75 +364,82 @@ export class AudioRecordingManager {
       const hasSox = await this.checkForSox();
       
       if (platform === 'darwin') {
-        if (hasSox) {
-          // macOS: Use Sox with CoreAudio (crystal-clear quality)
-          command = 'sox';
+        if (hasSox && this.soxPath) {
+          // macOS: Use Sox with CoreAudio (professional broadcast quality)
+          command = this.soxPath;
           const deviceName = this.getSelectedDeviceName();
           recordingArgs = [
             '-t', 'coreaudio',           // macOS audio system
             deviceName,                  // Selected device name (input)
-            '-r', '48000',              // 48kHz sample rate
-            '-b', '24',                 // 24-bit depth
-            '-c', '1',                  // Mono channel
+            '-r', '48000',              // 48kHz sample rate (professional standard)
+            '-b', '16',                 // 16-bit depth (universal device support)
+            '-c', '1',                  // Mono channel (voice recording standard)
             tempFilePath,               // Output file (must come after input settings)
-            'compand', '0.3,1', '6:-70,-60,-20', '-5', '-90', '0.2'  // Dynamic range compression
+            'highpass', '80',           // Remove low-frequency noise (rumble, hum, breath)
+            'compand', '0.1,0.3', '-inf,-50,-inf,-50,-30', '-5', '-60', '0.2'  // Noise gate + gentle compression
           ];
         } else {
-          // Fallback to FFmpeg with improved settings
+          // Fallback to FFmpeg with professional settings
           command = 'ffmpeg';
           recordingArgs = [
             '-f', 'avfoundation',
             '-i', `:${this.selectedDeviceIndex}`,
-            '-acodec', 'pcm_s16le',
-            '-ar', '44100',
-            '-ac', '1',
+            '-acodec', 'pcm_s16le',     // 16-bit PCM
+            '-ar', '48000',              // 48kHz sample rate (professional standard)
+            '-ac', '1',                  // Mono channel
+            '-af', 'highpass=f=80,acompressor=threshold=-50dB:ratio=3:attack=100:release=300',  // Noise reduction
             '-y',
             tempFilePath
           ];
         }
       } else if (platform === 'win32') {
-        if (hasSox) {
-          // Windows: Use Sox
-          command = 'sox';
+        if (hasSox && this.soxPath) {
+          // Windows: Use Sox (professional broadcast quality)
+          command = this.soxPath;
           recordingArgs = [
             '-d',                       // Default device (input)
-            '-r', '48000',             // Sample rate
-            '-b', '24',                // Bit depth
-            '-c', '1',                 // Channels
+            '-r', '48000',             // 48kHz sample rate (professional standard)
+            '-b', '16',                // 16-bit depth (universal device support)
+            '-c', '1',                 // Mono channel (voice recording standard)
             tempFilePath,              // Output file (after input settings)
-            'compand', '0.3,1', '6:-70,-60,-20', '-5', '-90', '0.2'
+            'highpass', '80',          // Remove low-frequency noise (rumble, hum, breath)
+            'compand', '0.1,0.3', '-inf,-50,-inf,-50,-30', '-5', '-60', '0.2'  // Noise gate + gentle compression
           ];
         } else {
-          // Fallback to FFmpeg
+          // Fallback to FFmpeg with professional settings
           command = 'ffmpeg';
           recordingArgs = [
             '-f', 'dshow',
             '-i', 'audio="Microphone"',
-            '-acodec', 'pcm_s16le',
-            '-ar', '44100',
-            '-ac', '2',
+            '-acodec', 'pcm_s16le',     // 16-bit PCM
+            '-ar', '48000',              // 48kHz sample rate (professional standard)
+            '-ac', '1',                  // Mono channel (fixed stereo bug)
+            '-af', 'highpass=f=80,acompressor=threshold=-50dB:ratio=3:attack=100:release=300',  // Noise reduction
             '-y',
             tempFilePath
           ];
         }
       } else {
-        if (hasSox) {
-          // Linux: Use Sox
-          command = 'sox';
+        if (hasSox && this.soxPath) {
+          // Linux: Use Sox (professional broadcast quality)
+          command = this.soxPath;
           recordingArgs = [
             '-d',                       // Default device (input)
-            '-r', '48000',             // Sample rate
-            '-b', '24',                // Bit depth
-            '-c', '1',                 // Channels
+            '-r', '48000',             // 48kHz sample rate (professional standard)
+            '-b', '16',                // 16-bit depth (universal device support)
+            '-c', '1',                 // Mono channel (voice recording standard)
             tempFilePath,              // Output file (after input settings)
-            'compand', '0.3,1', '6:-70,-60,-20', '-5', '-90', '0.2'
+            'highpass', '80',          // Remove low-frequency noise (rumble, hum, breath)
+            'compand', '0.1,0.3', '-inf,-50,-inf,-50,-30', '-5', '-60', '0.2'  // Noise gate + gentle compression
           ];
         } else {
-          // Fallback to arecord
+          // Fallback to arecord with professional settings
           command = 'arecord';
           recordingArgs = [
-            '-f', 'cd',
-            '-t', 'wav',
+            '-f', 'S16_LE',            // 16-bit little-endian (professional standard)
+            '-r', '48000',             // 48kHz sample rate
+            '-c', '1',                 // Mono channel
+            '-t', 'wav',               // WAV format
             tempFilePath
           ];
         }
@@ -486,21 +484,70 @@ export class AudioRecordingManager {
   }
 
   /**
-   * Checks if Sox is available on the system
+   * Checks if Sox is available on the system and stores its path
    */
   private async checkForSox(): Promise<boolean> {
     const platform = process.platform;
+
+    // Try to find sox using 'which' or 'where' first
     try {
-      if (platform === 'win32') {
-        await this.executeCommand('where sox');
-      } else {
-        await this.executeCommand('which sox');
+      const command = platform === 'win32' ? 'where sox' : 'which sox';
+      const soxPath = await this.executeCommand(command);
+      if (soxPath) {
+        this.soxPath = soxPath.trim().split('\n')[0]; // Take first path if multiple
+        console.log(`Found sox at: ${this.soxPath}`);
+        return true;
       }
-      return true;
     } catch (error) {
-      console.log('Sox not available:', error);
-      return false;
+      console.log('Sox not found in PATH, checking common installation locations...');
     }
+
+    // VS Code extension host might not have Homebrew paths - check common locations directly
+    const commonPaths = platform === 'win32'
+      ? ['C:\\Program Files\\sox\\sox.exe', 'C:\\Program Files (x86)\\sox\\sox.exe']
+      : ['/opt/homebrew/bin/sox', '/usr/local/bin/sox', '/usr/bin/sox'];
+
+    for (const soxPath of commonPaths) {
+      try {
+        // Check if file exists first
+        if (!fs.existsSync(soxPath)) {
+          continue;
+        }
+
+        // Verify sox works by running it directly (avoid executeCommand splitting issue)
+        await new Promise<void>((resolve, reject) => {
+          const proc = spawn(soxPath, ['--version']);
+
+          proc.on('close', (code) => {
+            if (code === 0) {
+              resolve();
+            } else {
+              reject(new Error(`Sox verification failed with code ${code}`));
+            }
+          });
+
+          proc.on('error', (error) => {
+            reject(error);
+          });
+
+          // Timeout after 5 seconds to prevent hanging
+          setTimeout(() => {
+            proc.kill();
+            reject(new Error('Sox verification timeout'));
+          }, 5000);
+        });
+
+        this.soxPath = soxPath;
+        console.log(`Found sox at: ${this.soxPath}`);
+        return true;
+      } catch (error) {
+        // Continue to next path
+        console.log(`Sox verification failed for ${soxPath}:`, error);
+      }
+    }
+
+    console.log('Sox not available on system');
+    return false;
   }
 
   /**
