@@ -345,6 +345,12 @@
         "icon": "$(primitive-square)"
       },
       {
+        "command": "codetour.selectMicrophone",
+        "title": "Select Microphone",
+        "category": "CodeTour Enhanced",
+        "icon": "$(settings-gear)"
+      },
+      {
         "command": "codetour.addAudioFromFile",
         "title": "Add Audio from File",
         "category": "CodeTour Enhanced",
