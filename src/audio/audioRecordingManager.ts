@@ -64,7 +64,7 @@ export class AudioRecordingManager {
 
       // Use sox to list CoreAudio devices
       const soxCmd = this.soxPath || 'sox';
-      const output = await this.executeCommandWithStderr(`"${soxCmd}" -V6 -n -t coreaudio junkname`);
+      const output = await this.executeCommandWithStderr(soxCmd, ['-V6', '-n', '-t', 'coreaudio', 'junkname']);
       const devices: AudioDevice[] = [];
       const lines = output.split('\n');
       
@@ -209,7 +209,7 @@ export class AudioRecordingManager {
   }
 
   /**
-   * Shows device selection dialog to user
+   * Shows device selection dialog to user with refresh capability
    */
   private async showDeviceSelection(): Promise<void> {
     if (this.availableDevices.length === 1) {
@@ -218,22 +218,59 @@ export class AudioRecordingManager {
       return;
     }
 
-    const items = this.availableDevices.map(device => ({
-      label: `${this.getDeviceIcon(device.type)} ${device.name}`,
-      description: this.getDeviceDescription(device.type),
-      detail: `Device ${device.index}`,
-      deviceIndex: device.index
-    }));
+    // Loop to allow refreshing device list
+    while (true) {
+      const items = [
+        // Add refresh option at the top
+        {
+          label: '🔄 Refresh Devices',
+          description: 'Re-detect audio devices',
+          detail: `Currently showing ${this.availableDevices.length} device(s)`,
+          deviceIndex: -2 // Special value for refresh
+        },
+        // Add all detected devices
+        ...this.availableDevices.map(device => ({
+          label: `${this.getDeviceIcon(device.type)} ${device.name}`,
+          description: this.getDeviceDescription(device.type),
+          detail: `Device ${device.index}`,
+          deviceIndex: device.index
+        }))
+      ];
 
-    const selected = await vscode.window.showQuickPick(items, {
-      placeHolder: "Select microphone for recording",
-      title: "Audio Device Selection"
-    });
+      const selected = await vscode.window.showQuickPick(items, {
+        placeHolder: "Select microphone for recording or refresh to detect new devices",
+        title: `Audio Device Selection (${this.availableDevices.length} devices found)`
+      });
 
-    if (selected) {
-      this.selectedDeviceIndex = selected.deviceIndex;
-    } else {
-      this.selectedDeviceIndex = -1; // User cancelled
+      if (!selected) {
+        // User cancelled
+        this.selectedDeviceIndex = -1;
+        return;
+      }
+
+      if (selected.deviceIndex === -2) {
+        // Refresh devices
+        console.log('Refreshing audio devices...');
+        try {
+          this.availableDevices = await this.detectAudioDevices();
+          console.log(`Refreshed: Found ${this.availableDevices.length} audio devices`);
+
+          if (this.availableDevices.length === 0) {
+            vscode.window.showWarningMessage("No audio devices detected. Please check your microphone connection and try refreshing again.");
+            // Continue loop to show refresh option again
+          }
+          // Loop continues to show updated device list
+        } catch (error) {
+          console.error('Failed to refresh audio devices:', error);
+          vscode.window.showErrorMessage('Failed to refresh audio devices. Please try again.');
+          // Loop continues
+        }
+      } else {
+        // User selected a device
+        this.selectedDeviceIndex = selected.deviceIndex;
+        console.log(`User selected device: ${this.availableDevices.find(d => d.index === selected.deviceIndex)?.name}`);
+        return;
+      }
     }
   }
 
@@ -809,21 +846,21 @@ export class AudioRecordingManager {
 
   /**
    * Executes a command and returns both stdout and stderr output
+   * Uses direct spawn to avoid quote-handling issues
    */
-  private executeCommandWithStderr(command: string): Promise<string> {
+  private executeCommandWithStderr(command: string, args: string[]): Promise<string> {
     return new Promise((resolve, reject) => {
-      const [cmd, ...args] = command.split(' ');
-      const process = spawn(cmd, args);
-      
+      const process = spawn(command, args);
+
       let output = '';
       process.stdout.on('data', (data) => {
         output += data.toString();
       });
-      
+
       process.stderr.on('data', (data) => {
         output += data.toString();
       });
-      
+
       process.on('close', (code) => {
         // For device listing, sox returns exit code 2 (can't open dummy device) but still provides device info
         // FFmpeg returns exit code 1 but still provides device info
@@ -834,7 +871,7 @@ export class AudioRecordingManager {
           reject(new Error(`Command failed with code ${code}`));
         }
       });
-      
+
       process.on('error', (error) => {
         reject(error);
       });
