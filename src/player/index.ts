@@ -203,7 +203,9 @@ export class CodeTourComment implements Comment {
   public contextValue: string = "";
   public author: CommentAuthorInformation = {
     name: CONTROLLER_LABEL,
-    iconPath: Uri.parse(SMALL_ICON_URL)
+    iconPath: store.extensionUri
+      ? Uri.joinPath(store.extensionUri, 'images', 'icon-small.png')
+      : Uri.parse(SMALL_ICON_URL)
   };
   public body: MarkdownString;
 

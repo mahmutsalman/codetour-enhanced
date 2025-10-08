@@ -3,7 +3,7 @@
 
 import * as vscode from "vscode";
 import { EXTENSION_NAME, SMALL_ICON_URL } from "../constants";
-import { CodeTour } from "../store";
+import { CodeTour, store } from "../store";
 import { getStepFileUri, getWorkspaceUri } from "../utils";
 
 class CodeTourNotebookProvider implements vscode.NotebookSerializer {
@@ -43,10 +43,14 @@ class CodeTourNotebookProvider implements vscode.NotebookSerializer {
     let cells: vscode.NotebookCellData[] = [];
 
     // Title cell
+    const iconUrl = store.extensionUri
+      ? vscode.Uri.joinPath(store.extensionUri, 'images', 'icon-small.png').toString()
+      : SMALL_ICON_URL;
+
     cells.push(
       new vscode.NotebookCellData(
         1,
-        `## ![Icon](${SMALL_ICON_URL})&nbsp;&nbsp; CodeTour (${tour.title}) - ${
+        `## ![Icon](${iconUrl})&nbsp;&nbsp; CodeTour (${tour.title}) - ${
           steps.length
         } steps\n\n${tour.description === undefined ? "" : tour.description}`,
         "markdown"

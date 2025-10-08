@@ -1,13 +1,13 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-import * as vscode from "vscode";
-import * as path from "path";
+import { ChildProcess, spawn } from "child_process";
 import * as fs from "fs";
-import { spawn, ChildProcess } from "child_process";
+import * as path from "path";
+import * as vscode from "vscode";
+import { saveTour } from "../recorder/commands";
 import { CodeTour } from "../store";
 import { addAudioToStep } from "../utils/audioStorage";
-import { saveTour } from "../recorder/commands";
 
 interface RecordingProcess {
   process: ChildProcess;
@@ -44,7 +44,7 @@ export class AudioRecordingManager {
    */
   private async detectAudioDevices(): Promise<AudioDevice[]> {
     const platform = process.platform;
-    
+
     if (platform === 'darwin') {
       return await this.detectMacOSDevices();
     } else if (platform === 'win32') {
@@ -67,9 +67,9 @@ export class AudioRecordingManager {
       const output = await this.executeCommandWithStderr(soxCmd, ['-V6', '-n', '-t', 'coreaudio', 'junkname']);
       const devices: AudioDevice[] = [];
       const lines = output.split('\n');
-      
+
       console.log('Raw sox CoreAudio output:', output); // Debug logging
-      
+
       for (const line of lines) {
         // Parse lines like: sox INFO coreaudio: Found Audio Device "MacBook Pro Microphone"
         if (line.includes('Found Audio Device')) {
@@ -77,9 +77,9 @@ export class AudioRecordingManager {
           if (match) {
             const name = match[1];
             const type = this.classifyMacOSDevice(name);
-            
+
             console.log(`Debug: Device "${name}" classified as "${type}"`); // Debug logging
-            
+
             // Add all microphone devices and any device that explicitly has microphone/input in name
             if (type === 'microphone' || name.toLowerCase().includes('input') || name.toLowerCase().includes('microphone')) {
               devices.push({ index: devices.length, name, type: 'microphone' });
@@ -90,14 +90,14 @@ export class AudioRecordingManager {
           }
         }
       }
-      
+
       // Fallback: Add common macOS devices if detection fails
       if (devices.length === 0) {
         console.warn('No microphone devices detected from sox output, using fallback devices');
         devices.push({ index: 0, name: 'default', type: 'microphone' });
         devices.push({ index: 1, name: 'MacBook Pro Microphone', type: 'microphone' });
       }
-      
+
       return devices;
     } catch (error) {
       console.warn('Failed to detect macOS audio devices:', error);
@@ -114,22 +114,22 @@ export class AudioRecordingManager {
    */
   private classifyMacOSDevice(name: string): 'microphone' | 'virtual' | 'system' {
     const lowerName = name.toLowerCase();
-    
+
     // Physical microphones - including external, USB, and built-in
-    if (lowerName.includes('microphone') || 
-        lowerName.includes('built-in') ||
-        (lowerName.includes('external') && lowerName.includes('microphone')) ||
-        lowerName.includes('usb') ||
-        lowerName.includes('input') ||
-        lowerName.includes('mic')) {
+    if (lowerName.includes('microphone') ||
+      lowerName.includes('built-in') ||
+      (lowerName.includes('external') && lowerName.includes('microphone')) ||
+      lowerName.includes('usb') ||
+      lowerName.includes('input') ||
+      lowerName.includes('mic')) {
       return 'microphone';
     }
-    
+
     // Virtual audio devices
     if (lowerName.includes('zoom') || lowerName.includes('virtual') || lowerName.includes('aggregate')) {
       return 'virtual';
     }
-    
+
     // System devices
     return 'system';
   }
@@ -165,7 +165,7 @@ export class AudioRecordingManager {
         "Stop Current Recording",
         "Cancel"
       );
-      
+
       if (action === "Stop Current Recording") {
         await this.stopRecording();
       }
@@ -391,13 +391,13 @@ export class AudioRecordingManager {
    */
   private async startSystemRecording(): Promise<void> {
     const platform = process.platform;
-    
+
     // Use workspace or OS temp directory for recordings
     const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-    const tempDir = workspaceRoot 
+    const tempDir = workspaceRoot
       ? path.join(workspaceRoot, '.tours', 'temp')
       : path.join(require('os').tmpdir(), 'codetour-recordings');
-    
+
     // Ensure temp directory exists with proper error handling
     try {
       if (!fs.existsSync(tempDir)) {
@@ -412,14 +412,14 @@ export class AudioRecordingManager {
 
     const timestamp = Date.now();
     const tempFilePath = path.join(tempDir, `recording_${timestamp}.wav`);
-    
+
     try {
       let recordingArgs: string[] = [];
       let command = '';
 
       // Try Sox first (crystal-clear quality), fallback to FFmpeg if needed
       const hasSox = await this.checkForSox();
-      
+
       if (platform === 'darwin') {
         if (hasSox && this.soxPath) {
           // macOS: Use Sox with CoreAudio (professional broadcast quality)
@@ -504,7 +504,7 @@ export class AudioRecordingManager {
 
       console.log(`Starting recording with: ${command} ${recordingArgs.join(' ')}`);
       const recordingProcess = spawn(command, recordingArgs);
-      
+
       this.recordingProcess = {
         process: recordingProcess,
         tempFilePath,
@@ -518,7 +518,7 @@ export class AudioRecordingManager {
       recordingProcess.stderr?.on('data', (data) => {
         const errorOutput = data.toString();
         console.log('Recording stderr:', errorOutput);
-        
+
         // Monitor for common issues
         if (errorOutput.includes('Permission denied') || errorOutput.includes('Device busy')) {
           console.warn('Recording permission/device issue:', errorOutput);
@@ -627,20 +627,20 @@ export class AudioRecordingManager {
     }
 
     const duration = (Date.now() - this.recordingProcess.startTime) / 1000;
-    
+
     // Stop the recording process
     this.recordingProcess.process.kill('SIGTERM');
-    
+
     // Wait a moment for the file to be finalized
     await new Promise(resolve => setTimeout(resolve, 1000));
 
     try {
       // Read the recorded file
       const audioData = fs.readFileSync(this.recordingProcess.tempFilePath);
-      
+
       // Check if recording is silent (basic check for file size)
       const isSilent = await this.checkIfRecordingIsSilent(audioData, duration);
-      
+
       if (isSilent) {
         const action = await vscode.window.showWarningMessage(
           "The recording appears to be silent. This might be due to incorrect microphone selection or system permissions.",
@@ -648,7 +648,7 @@ export class AudioRecordingManager {
           "Save Anyway",
           "Discard"
         );
-        
+
         if (action === "Try Different Device") {
           // Reset selected device to force device selection on next recording
           this.selectedDeviceIndex = -1;
@@ -660,7 +660,7 @@ export class AudioRecordingManager {
         }
         // If "Save Anyway" or no action, continue with saving
       }
-      
+
       // Add audio to step
       await addAudioToStep(
         this.currentTour!,
@@ -673,10 +673,10 @@ export class AudioRecordingManager {
       // Save tour
       await saveTour(this.currentTour!);
 
-      const message = isSilent 
+      const message = isSilent
         ? `⚠️ Audio saved but may be silent. Duration: ${this.formatDuration(duration)}`
         : `🎤 Audio recorded successfully! Duration: ${this.formatDuration(duration)}`;
-      
+
       vscode.window.showInformationMessage(message);
 
     } catch (error) {
@@ -752,7 +752,7 @@ export class AudioRecordingManager {
    */
   private showPersistentRecordingNotification(hasSox: boolean): void {
     const recordingTool = hasSox ? 'Sox' : 'Fallback mode';
-    
+
     // Create a progress notification that won't auto-dismiss
     vscode.window.withProgress({
       location: vscode.ProgressLocation.Notification,
@@ -760,35 +760,35 @@ export class AudioRecordingManager {
       cancellable: true
     }, async (progress, token) => {
       let timeElapsed = 0;
-      
+
       // Initial progress message
-      progress.report({ 
+      progress.report({
         message: `Recording in progress... 00:00 | Click status bar or Cancel to stop`
       });
-      
+
       // Update progress every 5 seconds to keep it alive
       const progressInterval = setInterval(() => {
         if (!this.recordingProcess) {
           clearInterval(progressInterval);
           return;
         }
-        
+
         timeElapsed += 5;
         const minutes = Math.floor(timeElapsed / 60);
         const seconds = timeElapsed % 60;
         const timeStr = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-        
-        progress.report({ 
+
+        progress.report({
           message: `Recording in progress... ${timeStr} | Click status bar or Cancel to stop`
         });
       }, 5000);
-      
+
       // Handle cancellation
       token.onCancellationRequested(() => {
         clearInterval(progressInterval);
         this.stopRecording();
       });
-      
+
       // Keep the notification open until recording stops
       return new Promise<void>((resolve) => {
         const checkRecording = () => {
@@ -809,24 +809,24 @@ export class AudioRecordingManager {
    */
   private startRecordingTimer(hasSox: boolean): void {
     if (!this.recordingProcess) return;
-    
+
     const recordingTool = hasSox ? 'Sox' : 'Fallback';
-    
+
     // Update immediately
     this.updateStatusBar(`🎤 Recording with ${recordingTool} - 00:00 - Click to STOP`, true);
-    
+
     // Update every second
     this.recordingTimer = setInterval(() => {
       if (!this.recordingProcess) {
         this.stopRecordingTimer();
         return;
       }
-      
+
       const elapsed = Date.now() - this.recordingProcess.startTime;
       const minutes = Math.floor(elapsed / 60000);
       const seconds = Math.floor((elapsed % 60000) / 1000);
       const timeStr = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-      
+
       this.updateStatusBar(`🎤 Recording with ${recordingTool} - ${timeStr} - Click to STOP`, true);
     }, 1000);
   }
@@ -846,9 +846,9 @@ export class AudioRecordingManager {
    */
   private updateStatusBar(text: string, isRecording: boolean): void {
     if (!this.statusBarItem) return;
-    
+
     this.statusBarItem.text = text;
-    this.statusBarItem.tooltip = isRecording 
+    this.statusBarItem.tooltip = isRecording
       ? 'Click to stop recording or press Ctrl+Shift+P → CodeTour: Stop Recording'
       : 'Audio recording';
   }
@@ -859,7 +859,7 @@ export class AudioRecordingManager {
   private cleanup(): void {
     // Stop the recording timer
     this.stopRecordingTimer();
-    
+
     if (this.recordingProcess) {
       // Clean up temp file
       try {
@@ -869,7 +869,7 @@ export class AudioRecordingManager {
       } catch (error) {
         console.warn('Failed to clean up temp file:', error);
       }
-      
+
       this.recordingProcess = null;
     }
 
@@ -890,12 +890,12 @@ export class AudioRecordingManager {
     return new Promise((resolve, reject) => {
       const [cmd, ...args] = command.split(' ');
       const process = spawn(cmd, args);
-      
+
       let output = '';
       process.stdout.on('data', (data) => {
         output += data.toString();
       });
-      
+
       process.on('close', (code) => {
         if (code === 0) {
           resolve(output.trim());
@@ -903,7 +903,7 @@ export class AudioRecordingManager {
           reject(new Error(`Command failed with code ${code}`));
         }
       });
-      
+
       process.on('error', (error) => {
         reject(error);
       });
@@ -950,16 +950,16 @@ export class AudioRecordingManager {
   private async checkIfRecordingIsSilent(audioData: Buffer, duration: number): Promise<boolean> {
     // Basic check: very small file size relative to duration indicates silence
     const expectedMinSize = duration * 1000; // Rough minimum bytes for actual audio
-    
+
     if (audioData.length < expectedMinSize) {
       return true;
     }
-    
+
     // Additional check: analyze audio data for non-zero samples
     // Skip WAV header (44 bytes) and check for non-zero audio data
     const audioStart = 44;
     const sampleSize = 100; // Check first 100 samples after header
-    
+
     if (audioData.length > audioStart + sampleSize) {
       for (let i = audioStart; i < audioStart + sampleSize; i++) {
         if (audioData[i] !== 0) {
@@ -968,7 +968,7 @@ export class AudioRecordingManager {
       }
       return true; // All samples are zero
     }
-    
+
     return false; // File too small to analyze properly
   }
 

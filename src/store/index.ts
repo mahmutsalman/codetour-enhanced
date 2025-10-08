@@ -128,6 +128,7 @@ export interface Store {
   progress: CodeTourProgress[];
   tourSortMode: TourSortMode;
   tourFilter: TourFilter;
+  extensionUri?: Uri;
 }
 
 export const store: Store = observable({

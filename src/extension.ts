@@ -78,7 +78,10 @@ class URIHandler implements vscode.UriHandler {
 export async function activate(context: vscode.ExtensionContext) {
   try {
     console.log("CodeTour: Starting activation...");
-    
+
+    // Store extension URI for accessing bundled resources
+    store.extensionUri = context.extensionUri;
+
     // Initialize core modules first
     registerPlayerModule(context);
     console.log("CodeTour: Player module registered");
