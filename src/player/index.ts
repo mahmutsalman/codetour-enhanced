@@ -66,7 +66,7 @@ function generateAudioGallery(step: CodeTourStep): string {
 
   let audioContent = "\n\n---\n\n";
   audioContent += `🎵 **Audio Recordings (${step.audios.length})**\n\n`;
-  
+
   for (const audio of step.audios) {
     const workspaceFolder = workspace.workspaceFolders?.[0];
     if (!workspaceFolder) continue;
@@ -94,7 +94,7 @@ function generateAudioGallery(step: CodeTourStep): string {
     
     audioContent += "\n\n";
   }
-  
+
   return audioContent;
 }
 
@@ -108,7 +108,7 @@ function generateImageGallery(step: CodeTourStep): string {
 
   let galleryContent = "\n\n---\n\n";
   galleryContent += `📎 **Attachments (${step.images.length})**\n\n`;
-  
+
   for (const image of step.images) {
     const workspaceFolder = workspace.workspaceFolders?.[0];
     if (!workspaceFolder) continue;
@@ -139,7 +139,7 @@ function generateImageGallery(step: CodeTourStep): string {
     
     galleryContent += `</div></div>\n\n`;
   }
-  
+
   return galleryContent;
 }
 
