@@ -432,8 +432,9 @@ export class AudioRecordingManager {
             '-b', '16',                 // 16-bit depth (universal device support)
             '-c', '1',                  // Mono channel (voice recording standard)
             tempFilePath,               // Output file (must come after input settings)
-            'highpass', '80',           // Remove low-frequency noise (rumble, hum, breath)
-            'compand', '0.1,0.3', '-inf,-50,-inf,-50,-30', '-5', '-60', '0.2'  // Noise gate + gentle compression
+            'highpass', '120',          // Remove low-frequency noise (increased for better noise removal)
+            'lowpass', '3400',          // Remove high-frequency noise (voice is 300-3400Hz)
+            'compand', '0.05,0.5', '-inf,-68,-inf,-68,-30', '-5', '-60', '0.2'  // Moderate gate (balances noise vs speech)
           ];
         } else {
           // Fallback to FFmpeg with professional settings
@@ -444,7 +445,7 @@ export class AudioRecordingManager {
             '-acodec', 'pcm_s16le',     // 16-bit PCM
             '-ar', '48000',              // 48kHz sample rate (professional standard)
             '-ac', '1',                  // Mono channel
-            '-af', 'highpass=f=80,acompressor=threshold=-50dB:ratio=3:attack=100:release=300',  // Noise reduction
+            '-af', 'highpass=f=120,lowpass=f=3400,anlmdn,acompressor=threshold=-68dB:ratio=3:attack=50:release=500',  // Bandpass + noise reduction + moderate gate
             '-y',
             tempFilePath
           ];
@@ -459,8 +460,9 @@ export class AudioRecordingManager {
             '-b', '16',                // 16-bit depth (universal device support)
             '-c', '1',                 // Mono channel (voice recording standard)
             tempFilePath,              // Output file (after input settings)
-            'highpass', '80',          // Remove low-frequency noise (rumble, hum, breath)
-            'compand', '0.1,0.3', '-inf,-50,-inf,-50,-30', '-5', '-60', '0.2'  // Noise gate + gentle compression
+            'highpass', '120',          // Remove low-frequency noise (increased for better noise removal)
+            'lowpass', '3400',          // Remove high-frequency noise (voice is 300-3400Hz)
+            'compand', '0.05,0.5', '-inf,-68,-inf,-68,-30', '-5', '-60', '0.2'  // Moderate gate (balances noise vs speech)
           ];
         } else {
           // Fallback to FFmpeg with professional settings
@@ -471,7 +473,7 @@ export class AudioRecordingManager {
             '-acodec', 'pcm_s16le',     // 16-bit PCM
             '-ar', '48000',              // 48kHz sample rate (professional standard)
             '-ac', '1',                  // Mono channel (fixed stereo bug)
-            '-af', 'highpass=f=80,acompressor=threshold=-50dB:ratio=3:attack=100:release=300',  // Noise reduction
+            '-af', 'highpass=f=120,lowpass=f=3400,anlmdn,acompressor=threshold=-68dB:ratio=3:attack=50:release=500',  // Bandpass + noise reduction + moderate gate
             '-y',
             tempFilePath
           ];
@@ -486,8 +488,9 @@ export class AudioRecordingManager {
             '-b', '16',                // 16-bit depth (universal device support)
             '-c', '1',                 // Mono channel (voice recording standard)
             tempFilePath,              // Output file (after input settings)
-            'highpass', '80',          // Remove low-frequency noise (rumble, hum, breath)
-            'compand', '0.1,0.3', '-inf,-50,-inf,-50,-30', '-5', '-60', '0.2'  // Noise gate + gentle compression
+            'highpass', '120',          // Remove low-frequency noise (increased for better noise removal)
+            'lowpass', '3400',          // Remove high-frequency noise (voice is 300-3400Hz)
+            'compand', '0.05,0.5', '-inf,-68,-inf,-68,-30', '-5', '-60', '0.2'  // Moderate gate (balances noise vs speech)
           ];
         } else {
           // Fallback to arecord with professional settings
