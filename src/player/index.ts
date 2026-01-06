@@ -99,7 +99,7 @@ function generateAudioGallery(step: CodeTourStep): string {
 }
 
 /**
- * Generates image gallery with standardized sizing for a tour step
+ * Generates image gallery with grid layout for compact display
  */
 function generateImageGallery(step: CodeTourStep): string {
   if (!step.images || step.images.length === 0) {
@@ -109,36 +109,61 @@ function generateImageGallery(step: CodeTourStep): string {
   let galleryContent = "\n\n---\n\n";
   galleryContent += `📎 **Attachments (${step.images.length})**\n\n`;
 
+  // Use table layout for better VS Code comment HTML support
+  galleryContent += `<table style="border-collapse: collapse; border: none;"><tr>`;
+
+  let columnCount = 0;
+  const maxColumns = 3;
+
   for (const image of step.images) {
     const workspaceFolder = workspace.workspaceFolders?.[0];
     if (!workspaceFolder) continue;
-    
-    const imageUri = Uri.joinPath(workspaceFolder.uri, image.path);
-    
-    // Create a clickable image with size constraints using HTML
-    galleryContent += `<div style="border: 1px solid #454545; border-radius: 6px; padding: 8px; margin: 8px 0; max-width: ${IMAGE_DISPLAY.DEFAULT_MAX_WIDTH + 20}px;">`;
-    galleryContent += `<a href="command:codetour.viewImage?${encodeURIComponent(JSON.stringify([image.path]))}" title="Click to view full size">`;
-    galleryContent += `<img src="${imageUri.toString()}" alt="${image.filename}" style="max-width: ${IMAGE_DISPLAY.DEFAULT_MAX_WIDTH}px; max-height: ${IMAGE_DISPLAY.DEFAULT_MAX_HEIGHT}px; width: auto; height: auto; object-fit: contain; border-radius: 4px; display: block;" />`;
-    galleryContent += `</a>`;
-    
-    // Add filename and caption
-    galleryContent += `<div style="margin-top: 8px; font-size: 0.9em;">`;
-    galleryContent += `<div style="font-weight: bold;">${image.filename}</div>`;
-    if (image.caption) {
-      galleryContent += `<div style="font-style: italic; color: #888; margin-top: 4px;">${image.caption}</div>`;
+
+    // Use thumbnail path for display, fallback to original if no thumbnail
+    const displayPath = image.thumbnail || image.path;
+    const imageUri = Uri.joinPath(workspaceFolder.uri, displayPath);
+    const viewCommand = `command:codetour.viewImage?${encodeURIComponent(JSON.stringify([image.path]))}`;
+
+    // Start new row if needed
+    if (columnCount > 0 && columnCount % maxColumns === 0) {
+      galleryContent += `</tr><tr>`;
     }
-    
+
+    // Table cell with thumbnail
+    galleryContent += `<td style="padding: ${IMAGE_DISPLAY.GRID_GAP}px; vertical-align: top; border: none;">`;
+
+    // Clickable image with filename in tooltip
+    galleryContent += `<a href="${viewCommand}" title="${image.filename} - Click to view full size" style="display: block; text-decoration: none;">`;
+    galleryContent += `<img src="${imageUri.toString()}" alt="${image.caption || image.filename}" style="width: ${IMAGE_DISPLAY.GRID_THUMBNAIL_WIDTH}px; height: auto; border: 1px solid #454545; border-radius: 4px; display: block;" />`;
+    galleryContent += `</a>`;
+
+    // Add caption if present (truncated)
+    if (image.caption) {
+      const maxCaptionLength = 20;
+      const truncatedCaption = image.caption.length > maxCaptionLength
+        ? image.caption.substring(0, 17) + "..."
+        : image.caption;
+
+      galleryContent += `<div style="margin-top: 2px; font-size: 0.7em; color: #888; font-style: italic; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: ${IMAGE_DISPLAY.GRID_THUMBNAIL_WIDTH}px;" title="${image.caption}">${truncatedCaption}</div>`;
+    }
+
     // Add image management commands for editing mode
     if (store.isRecording && store.isEditing) {
       const removeArgs = encodeURIComponent(JSON.stringify([image.id]));
       const captionArgs = encodeURIComponent(JSON.stringify([image.id]));
-      galleryContent += `<div style="margin-top: 8px; font-size: 0.85em;">`;
-      galleryContent += `<a href="command:codetour.updateImageCaption?${captionArgs}">$(edit) Edit Caption</a> | <a href="command:codetour.removeImage?${removeArgs}">$(trash) Remove</a>`;
+
+      galleryContent += `<div style="margin-top: 4px; font-size: 0.7em;">`;
+      galleryContent += `<a href="command:codetour.updateImageCaption?${captionArgs}" style="text-decoration: none; margin-right: 8px;" title="Edit Caption">$(edit)</a>`;
+      galleryContent += `<a href="command:codetour.removeImage?${removeArgs}" style="text-decoration: none; color: #f48771;" title="Remove Image">$(trash)</a>`;
       galleryContent += `</div>`;
     }
-    
-    galleryContent += `</div></div>\n\n`;
+
+    galleryContent += `</td>`;
+    columnCount++;
   }
+
+  // Close table
+  galleryContent += `</tr></table>\n\n`;
 
   return galleryContent;
 }

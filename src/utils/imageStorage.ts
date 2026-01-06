@@ -5,10 +5,11 @@ import * as path from "path";
 import { Uri, workspace } from "vscode";
 import { CodeTour, CodeTourStepImage } from "../store";
 import { getActiveWorkspacePath } from "../utils";
+import { Jimp } from "jimp";
 
 const IMAGES_FOLDER = ".tours/images";
 const THUMBNAIL_PREFIX = "thumb-";
-const THUMBNAIL_SIZE = 400; // 400x400 pixels for comment display
+const THUMBNAIL_SIZE = 120; // 120px width for grid thumbnail display
 
 /**
  * Generates the image storage path for a specific tour and step
@@ -185,26 +186,49 @@ export async function cleanupTourImages(tour: CodeTour): Promise<void> {
 }
 
 /**
- * Gets basic image dimensions from image data
- * This is a simplified implementation - can be enhanced with proper image processing
+ * Gets image dimensions from image data using jimp
  */
 async function getImageDimensions(imageData: Uint8Array): Promise<{width: number; height: number}> {
-  // For now, return default dimensions
-  // TODO: Implement proper image dimension detection
-  return { width: 0, height: 0 };
+  try {
+    const image = await Jimp.read(Buffer.from(imageData));
+    return {
+      width: image.width,
+      height: image.height
+    };
+  } catch (error) {
+    console.warn('Failed to read image dimensions:', error);
+    return { width: 0, height: 0 };
+  }
 }
 
 /**
- * Generates a thumbnail for an image
- * Simple implementation that copies original - size control handled at display level
+ * Generates a thumbnail for an image using jimp
+ * Resizes to specified size while maintaining aspect ratio
  */
 async function generateThumbnail(
   imageData: Uint8Array,
   thumbnailUri: Uri,
   size: number
 ): Promise<void> {
-  // For VS Code extensions, we'll copy the original and handle sizing at display level
-  await workspace.fs.writeFile(thumbnailUri, imageData);
+  try {
+    const image = await Jimp.read(Buffer.from(imageData));
+
+    // Resize to thumbnail size (width), height auto-calculated to maintain aspect ratio
+    const aspectRatio = image.height / image.width;
+    const thumbnailHeight = Math.round(size * aspectRatio);
+    await image.resize({ w: size, h: thumbnailHeight });
+
+    // Get the thumbnail buffer
+    // In jimp v1, we need to use getBuffer with the image format
+    const buffer = await image.getBuffer('image/png');
+
+    // Save thumbnail
+    await workspace.fs.writeFile(thumbnailUri, new Uint8Array(buffer));
+  } catch (error) {
+    console.warn('Failed to generate thumbnail, using original:', error);
+    // Fallback: use original image if thumbnail generation fails
+    await workspace.fs.writeFile(thumbnailUri, imageData);
+  }
 }
 
 /**

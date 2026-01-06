@@ -285,39 +285,46 @@ export class GalleryManager {
       height: 100%;
       background-color: rgba(0, 0, 0, 0.9);
       display: grid;
-      grid-template-rows: auto 1fr auto;
+      grid-template-columns: auto 1fr;
+      grid-template-rows: 1fr auto;
       z-index: 1000;
     }
-    
+
     .gallery-header {
       display: flex;
-      justify-content: space-between;
+      flex-direction: column;
       align-items: center;
-      padding: 8px 12px;
-      background-color: var(--vscode-titleBar-activeBackground);
-      border-bottom: 1px solid var(--vscode-titleBar-border);
+      padding: 16px 12px;
+      gap: 16px;
+      background-color: rgba(0, 0, 0, 0.95);
+      border-right: 1px solid rgba(255, 255, 255, 0.1);
+      grid-row: 1 / -1;
     }
 
     .gallery-title {
       display: flex;
+      flex-direction: column;
       align-items: center;
       gap: 8px;
       font-size: 13px;
+      text-align: center;
+      writing-mode: horizontal-tb;
     }
 
     .gallery-counter {
       background-color: var(--vscode-badge-background);
       color: var(--vscode-badge-foreground);
-      padding: 2px 6px;
+      padding: 4px 8px;
       border-radius: 10px;
       font-size: 11px;
       font-weight: 600;
     }
-    
+
     .zoom-controls {
       display: flex;
+      flex-direction: column;
       align-items: center;
-      gap: 6px;
+      gap: 8px;
     }
 
     .zoom-button {
@@ -356,26 +363,36 @@ export class GalleryManager {
     }
     
     .close-button {
-      background: none;
-      border: none;
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      background: rgba(0, 0, 0, 0.7);
+      border: 1px solid rgba(255, 255, 255, 0.2);
       color: var(--vscode-foreground);
-      font-size: 20px;
+      font-size: 24px;
       cursor: pointer;
-      padding: 4px;
-      border-radius: 3px;
-      transition: background-color 0.2s;
+      padding: 4px 8px;
+      border-radius: 4px;
+      transition: all 0.2s;
+      z-index: 20;
+      width: 32px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
 
     .close-button:hover {
-      background-color: var(--vscode-toolbar-hoverBackground);
+      background-color: rgba(0, 0, 0, 0.9);
+      transform: scale(1.05);
     }
 
     .info-icon {
       position: absolute;
-      top: 16px;
+      bottom: 16px;
       left: 16px;
-      width: 24px;
-      height: 24px;
+      width: 28px;
+      height: 28px;
       border-radius: 50%;
       background-color: rgba(0, 0, 0, 0.6);
       color: white;
@@ -397,7 +414,7 @@ export class GalleryManager {
 
     .info-tooltip {
       position: absolute;
-      top: 50px;
+      bottom: 52px;
       left: 16px;
       background-color: rgba(0, 0, 0, 0.95);
       color: white;
@@ -409,7 +426,7 @@ export class GalleryManager {
       z-index: 20;
       pointer-events: none;
       opacity: 0;
-      transform: translateY(-10px);
+      transform: translateY(10px);
       transition: all 0.3s ease;
       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
       border: 1px solid rgba(255, 255, 255, 0.1);
@@ -548,6 +565,7 @@ export class GalleryManager {
       height: auto;
       align-items: center;
       scroll-behavior: smooth;
+      grid-column: 1 / -1;
     }
     
     .thumbnail-strip::-webkit-scrollbar {
@@ -591,38 +609,51 @@ export class GalleryManager {
     /* Responsive adjustments */
     @media (max-width: 768px) {
       .gallery-header {
-        padding: 6px 10px;
+        padding: 12px 8px;
+        gap: 12px;
       }
 
       .gallery-title {
-        font-size: 12px;
+        font-size: 11px;
+      }
+
+      .gallery-counter {
+        font-size: 10px;
+        padding: 3px 6px;
       }
 
       .zoom-button {
-        width: 24px;
-        height: 24px;
+        width: 28px;
+        height: 28px;
         font-size: 12px;
       }
 
       .zoom-level {
         font-size: 9px;
         min-width: 34px;
+        padding: 3px 6px;
       }
 
       .gallery-main {
         padding: 10px;
       }
 
+      .close-button {
+        width: 28px;
+        height: 28px;
+        font-size: 20px;
+      }
+
       .info-icon {
-        top: 12px;
+        bottom: 12px;
         left: 12px;
-        width: 22px;
-        height: 22px;
+        width: 24px;
+        height: 24px;
         font-size: 12px;
       }
 
       .info-tooltip {
-        top: 44px;
+        bottom: 44px;
         left: 12px;
         max-width: 250px;
         font-size: 11px;
@@ -654,40 +685,52 @@ export class GalleryManager {
         padding: 10px;
       }
     }
-    
+
     /* Very small screens */
     @media (max-width: 480px) {
       .gallery-header {
-        padding: 5px 8px;
+        padding: 10px 6px;
+        gap: 10px;
       }
 
       .gallery-title {
-        font-size: 11px;
+        font-size: 10px;
       }
 
       .gallery-counter {
         font-size: 9px;
-        padding: 1px 5px;
+        padding: 2px 5px;
       }
 
       .zoom-button {
-        width: 22px;
-        height: 22px;
+        width: 26px;
+        height: 26px;
         font-size: 11px;
       }
 
       .zoom-level {
         font-size: 8px;
         min-width: 32px;
+        padding: 2px 5px;
+      }
+
+      .close-button {
+        width: 26px;
+        height: 26px;
+        font-size: 18px;
       }
 
       .info-icon {
+        bottom: 10px;
+        left: 10px;
         width: 20px;
         height: 20px;
         font-size: 11px;
       }
 
       .info-tooltip {
+        bottom: 38px;
+        left: 10px;
         max-width: 200px;
         font-size: 10px;
         padding: 8px 12px;
@@ -724,17 +767,19 @@ export class GalleryManager {
   <div class="gallery-overlay">
     <div class="gallery-header">
       <div class="gallery-title">
-        <span>📎 Image Gallery</span>
-        <span class="gallery-counter">${currentIndex + 1} / ${totalImages}</span>
+        <span>📎</span>
+        <span>Gallery</span>
+        <span class="gallery-counter">${currentIndex + 1}/${totalImages}</span>
       </div>
       <div class="zoom-controls">
-        <button class="zoom-button" onclick="zoomOut()" title="Zoom Out (-)">−</button>
-        <span class="zoom-level" id="zoom-level">100%</span>
         <button class="zoom-button" onclick="zoomIn()" title="Zoom In (+)">+</button>
+        <span class="zoom-level" id="zoom-level">100%</span>
+        <button class="zoom-button" onclick="zoomOut()" title="Zoom Out (-)">−</button>
         <button class="zoom-button" onclick="resetZoom()" title="Reset Zoom (0)">⌂</button>
       </div>
-      <button class="close-button" onclick="closeGallery()" title="Close Gallery (Escape)">×</button>
     </div>
+
+    <button class="close-button" onclick="closeGallery()" title="Close Gallery (Escape)">×</button>
     
     <div class="gallery-main">
       <div class="image-container">
@@ -944,15 +989,12 @@ export class GalleryManager {
     // Mouse wheel zoom functionality
     const imageContainer = document.querySelector('.image-container');
     imageContainer.addEventListener('wheel', (event) => {
-      // Only zoom with Ctrl/Cmd key
-      if (event.ctrlKey || event.metaKey) {
-        event.preventDefault();
-        
-        if (event.deltaY < 0) {
-          zoomIn();
-        } else {
-          zoomOut();
-        }
+      event.preventDefault();
+
+      if (event.deltaY < 0) {
+        zoomIn();
+      } else {
+        zoomOut();
       }
     });
     

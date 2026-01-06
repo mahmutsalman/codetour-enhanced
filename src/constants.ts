@@ -21,12 +21,17 @@ export const IMAGE_DISPLAY = {
   // Default max dimensions for images in comments (reduced for better UX)
   DEFAULT_MAX_WIDTH: 250,
   DEFAULT_MAX_HEIGHT: 200,
-  
+
   // Thumbnail dimensions for compact view
   THUMBNAIL_WIDTH: 250,
   THUMBNAIL_HEIGHT: 200,
-  
+
   // Small preview dimensions for inline display
   SMALL_MAX_WIDTH: 150,
-  SMALL_MAX_HEIGHT: 120
+  SMALL_MAX_HEIGHT: 120,
+
+  // Grid thumbnail configuration for compact multi-image display
+  GRID_THUMBNAIL_WIDTH: 120,
+  GRID_THUMBNAIL_HEIGHT: 96,
+  GRID_GAP: 8
 };
