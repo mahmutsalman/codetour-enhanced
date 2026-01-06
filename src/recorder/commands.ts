@@ -7,7 +7,7 @@ import * as vscode from "vscode";
 import { workspace } from "vscode";
 import { EXTENSION_NAME, FS_SCHEME_CONTENT } from "../constants";
 import { api, RefType } from "../git";
-import { CodeTourComment } from "../player";
+import { CodeTourComment, refreshCurrentStep } from "../player";
 import { CodeTourNode, CodeTourStepNode } from "../player/tree/nodes";
 import { CodeTour, CodeTourStep, store } from "../store";
 import { stripGeneratedMediaSections } from "../utils/stepContent";
@@ -613,6 +613,9 @@ export function registerRecorderCommands() {
       store.isEditing = false;
       vscode.commands.executeCommand("setContext", EDITING_KEY, false);
       await saveTour(store.activeTour!.tour);
+
+      // Refresh the step to show it in preview mode with full galleries
+      await refreshCurrentStep();
     }
   );
 

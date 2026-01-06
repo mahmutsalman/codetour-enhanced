@@ -8,6 +8,7 @@ import { getClipboardImage, hasClipboardImage } from "../utils/clipboard";
 import { addImageToStep, removeImageFromStep, updateImageCaption } from "../utils/imageStorage";
 import { saveTour } from "./commands";
 import { GalleryManager } from "../gallery/galleryManager";
+import { refreshCurrentStep } from "../player";
 
 /**
  * Registers image-related commands for CodeTour
@@ -76,7 +77,7 @@ export function registerImageCommands() {
         // Add image to current step
         const tour = store.activeTour.tour;
         const stepIndex = store.activeTour.step;
-        
+
         await addImageToStep(
           tour,
           stepIndex,
@@ -87,6 +88,9 @@ export function registerImageCommands() {
 
         // Save tour with new image
         await saveTour(tour);
+
+        // Refresh the current step to update the attachment count immediately
+        await refreshCurrentStep();
 
         vscode.window.showInformationMessage("Image added to tour step successfully!");
 
@@ -135,7 +139,7 @@ export function registerImageCommands() {
         // Add image to current step
         const tour = store.activeTour.tour;
         const stepIndex = store.activeTour.step;
-        
+
         await addImageToStep(
           tour,
           stepIndex,
@@ -146,6 +150,9 @@ export function registerImageCommands() {
 
         // Save tour with new image
         await saveTour(tour);
+
+        // Refresh the current step to update the attachment count immediately
+        await refreshCurrentStep();
 
         vscode.window.showInformationMessage("Image added to tour step successfully!");
 
@@ -188,9 +195,12 @@ export function registerImageCommands() {
         }
 
         await removeImageFromStep(tour, stepIndex, imageId);
-        
+
         // Save tour
         await saveTour(tour);
+
+        // Refresh the current step to update the attachment count immediately
+        await refreshCurrentStep();
 
         vscode.window.showInformationMessage("Image removed successfully!");
 
@@ -242,9 +252,12 @@ export function registerImageCommands() {
 
         // Update caption
         updateImageCaption(tour, stepIndex, imageId, newCaption || undefined);
-        
+
         // Save tour
         await saveTour(tour);
+
+        // Refresh the current step to update the attachment count immediately
+        await refreshCurrentStep();
 
         vscode.window.showInformationMessage("Image caption updated!");
 

@@ -143,6 +143,29 @@ function generateImageGallery(step: CodeTourStep): string {
   return galleryContent;
 }
 
+/**
+ * Generates simplified text summary for edit mode (avoids HTML in editable content)
+ */
+function generateEditModeAttachmentSummary(step: CodeTourStep): string {
+  let summary = "";
+
+  if (step.images && step.images.length > 0) {
+    summary += "\n\n---\n\n";
+    summary += `📎 **Attachments (${step.images.length})**\n\n`;
+    summary += "_View attachments in preview mode or click Edit to manage them._\n";
+  }
+
+  if (step.audios && step.audios.length > 0) {
+    if (!summary) {
+      summary += "\n\n---\n\n";
+    }
+    summary += `🎵 **Audio Recordings (${step.audios.length})**\n\n`;
+    summary += "_View audio recordings in preview mode or click Edit to manage them._\n";
+  }
+
+  return summary;
+}
+
 export function generatePreviewContent(content: string) {
   return content
     .replace(SHELL_SCRIPT_PATTERN, (_, script) => {
@@ -433,9 +456,15 @@ async function renderCurrentStep() {
     }
   }
 
-  // Always show media galleries (controls will appear when editing)
-  content += generateAudioGallery(step);
-  content += generateImageGallery(step);
+  // Show media galleries or simplified summary depending on step's comment mode
+  if (mode === CommentMode.Editing) {
+    // In edit mode, show simplified summary to avoid HTML in editable content
+    content += generateEditModeAttachmentSummary(step);
+  } else {
+    // In preview mode, show full galleries with HTML formatting
+    content += generateAudioGallery(step);
+    content += generateImageGallery(step);
+  }
 
   const comment = new CodeTourComment(
     content,
@@ -514,6 +543,14 @@ async function renderCurrentStep() {
       }
     }
   }
+}
+
+/**
+ * Manually refresh the current step display.
+ * Useful for triggering UI updates after programmatic changes.
+ */
+export async function refreshCurrentStep() {
+  return renderCurrentStep();
 }
 
 async function showDocument(uri: Uri, range: Range, selection?: Selection) {
