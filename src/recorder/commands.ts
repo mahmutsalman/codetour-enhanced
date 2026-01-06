@@ -46,14 +46,30 @@ export function registerRecorderCommands() {
       throw new Error("Workspace root is required to create tour file URI");
     }
 
+    // Validate workspaceRoot has a valid path property
+    if (!workspaceRoot.path) {
+      console.error("DEBUG: workspaceRoot missing path property:", {
+        scheme: workspaceRoot.scheme,
+        authority: workspaceRoot.authority,
+        fsPath: workspaceRoot.fsPath,
+        toString: workspaceRoot.toString()
+      });
+      throw new Error(`Invalid workspace URI: path property is undefined (scheme: ${workspaceRoot.scheme})`);
+    }
+
     const file = title
       .toLocaleLowerCase()
       .replace(/\s/g, "-")
       .replace(/[^\w\d\-_]/g, "");
 
-    const prefix = workspaceRoot.path.endsWith("/")
-      ? workspaceRoot.path
-      : `${workspaceRoot.path}/`;
+    const pathStr = workspaceRoot.path || "";
+    const prefix = pathStr.endsWith("/")
+      ? pathStr
+      : pathStr ? `${pathStr}/` : "";
+
+    if (!prefix) {
+      throw new Error("Unable to determine workspace path for tour creation");
+    }
 
     const customTourDirectory = vscode.workspace
       .getConfiguration(EXTENSION_NAME)
