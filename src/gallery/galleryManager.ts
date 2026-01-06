@@ -293,64 +293,65 @@ export class GalleryManager {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 20px;
+      padding: 8px 12px;
       background-color: var(--vscode-titleBar-activeBackground);
       border-bottom: 1px solid var(--vscode-titleBar-border);
     }
-    
+
     .gallery-title {
       display: flex;
       align-items: center;
-      gap: 10px;
+      gap: 8px;
+      font-size: 13px;
     }
-    
+
     .gallery-counter {
       background-color: var(--vscode-badge-background);
       color: var(--vscode-badge-foreground);
-      padding: 4px 8px;
-      border-radius: 12px;
-      font-size: 12px;
-      font-weight: bold;
+      padding: 2px 6px;
+      border-radius: 10px;
+      font-size: 11px;
+      font-weight: 600;
     }
     
     .zoom-controls {
       display: flex;
       align-items: center;
-      gap: 10px;
+      gap: 6px;
     }
-    
+
     .zoom-button {
       background: var(--vscode-button-secondaryBackground);
       color: var(--vscode-button-secondaryForeground);
       border: 1px solid var(--vscode-button-border);
-      width: 32px;
-      height: 32px;
-      border-radius: 4px;
+      width: 26px;
+      height: 26px;
+      border-radius: 3px;
       cursor: pointer;
-      font-size: 16px;
+      font-size: 14px;
       display: flex;
       align-items: center;
       justify-content: center;
       transition: all 0.2s;
     }
-    
+
     .zoom-button:hover {
       background: var(--vscode-button-secondaryHoverBackground);
     }
-    
+
     .zoom-button:disabled {
       opacity: 0.5;
       cursor: not-allowed;
     }
-    
+
     .zoom-level {
       background-color: var(--vscode-badge-background);
       color: var(--vscode-badge-foreground);
-      padding: 4px 8px;
-      border-radius: 12px;
-      font-size: 11px;
-      font-weight: bold;
-      min-width: 40px;
+      padding: 2px 6px;
+      border-radius: 10px;
+      font-size: 10px;
+      font-weight: 600;
+      min-width: 38px;
       text-align: center;
     }
     
@@ -358,15 +359,106 @@ export class GalleryManager {
       background: none;
       border: none;
       color: var(--vscode-foreground);
-      font-size: 24px;
+      font-size: 20px;
       cursor: pointer;
-      padding: 5px;
+      padding: 4px;
       border-radius: 3px;
       transition: background-color 0.2s;
     }
-    
+
     .close-button:hover {
       background-color: var(--vscode-toolbar-hoverBackground);
+    }
+
+    .info-icon {
+      position: absolute;
+      top: 16px;
+      left: 16px;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background-color: rgba(0, 0, 0, 0.6);
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      font-weight: bold;
+      cursor: help;
+      z-index: 15;
+      transition: all 0.2s;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+    }
+
+    .info-icon:hover {
+      background-color: rgba(0, 0, 0, 0.8);
+      transform: scale(1.05);
+    }
+
+    .info-tooltip {
+      position: absolute;
+      top: 50px;
+      left: 16px;
+      background-color: rgba(0, 0, 0, 0.95);
+      color: white;
+      padding: 12px 16px;
+      border-radius: 8px;
+      font-size: 12px;
+      line-height: 1.6;
+      max-width: 300px;
+      z-index: 20;
+      pointer-events: none;
+      opacity: 0;
+      transform: translateY(-10px);
+      transition: all 0.3s ease;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .info-icon:hover + .info-tooltip {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .info-tooltip-title {
+      font-weight: bold;
+      margin-bottom: 8px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+      color: #4fc3f7;
+    }
+
+    .info-tooltip-section {
+      margin-bottom: 10px;
+    }
+
+    .info-tooltip-section:last-child {
+      margin-bottom: 0;
+    }
+
+    .info-tooltip-label {
+      font-weight: 600;
+      opacity: 0.8;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 4px;
+    }
+
+    .info-tooltip-value {
+      color: #ffffff;
+      word-break: break-word;
+    }
+
+    .info-tooltip-kbd {
+      display: inline-block;
+      background-color: rgba(255, 255, 255, 0.15);
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-family: monospace;
+      font-size: 11px;
+      margin: 0 2px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
     }
     
     .gallery-main {
@@ -443,29 +535,6 @@ export class GalleryManager {
       right: -80px;
     }
     
-    .image-info {
-      position: absolute;
-      bottom: 20px;
-      left: 50%;
-      transform: translateX(-50%);
-      background-color: rgba(0, 0, 0, 0.8);
-      color: white;
-      padding: 12px 20px;
-      border-radius: 20px;
-      text-align: center;
-      max-width: 80%;
-    }
-    
-    .image-filename {
-      font-weight: bold;
-      margin-bottom: 4px;
-    }
-    
-    .image-caption {
-      font-size: 14px;
-      opacity: 0.9;
-    }
-    
     .thumbnail-strip {
       background-color: var(--vscode-sideBar-background);
       border-top: 1px solid var(--vscode-sideBar-border);
@@ -519,76 +588,120 @@ export class GalleryManager {
       box-shadow: 0 0 0 2px var(--vscode-focusBorder);
     }
     
-    .keyboard-hint {
-      position: absolute;
-      bottom: 100px;
-      right: 20px;
-      background-color: rgba(0, 0, 0, 0.7);
-      color: white;
-      padding: 8px 12px;
-      border-radius: 4px;
-      font-size: 12px;
-      opacity: 0.7;
-    }
-    
     /* Responsive adjustments */
     @media (max-width: 768px) {
       .gallery-header {
-        padding: 15px;
+        padding: 6px 10px;
       }
-      
+
+      .gallery-title {
+        font-size: 12px;
+      }
+
+      .zoom-button {
+        width: 24px;
+        height: 24px;
+        font-size: 12px;
+      }
+
+      .zoom-level {
+        font-size: 9px;
+        min-width: 34px;
+      }
+
       .gallery-main {
         padding: 10px;
       }
-      
+
+      .info-icon {
+        top: 12px;
+        left: 12px;
+        width: 22px;
+        height: 22px;
+        font-size: 12px;
+      }
+
+      .info-tooltip {
+        top: 44px;
+        left: 12px;
+        max-width: 250px;
+        font-size: 11px;
+        padding: 10px 14px;
+      }
+
       .nav-button.prev {
         left: 10px;
         width: 40px;
         height: 40px;
         font-size: 16px;
       }
-      
+
       .nav-button.next {
         right: 10px;
         width: 40px;
         height: 40px;
         font-size: 16px;
       }
-      
+
       .thumbnail {
         width: 60px;
         height: 45px;
       }
-      
+
       .thumbnail-strip {
         min-height: 75px;
         max-height: 90px;
         padding: 10px;
       }
-      
-      .image-info {
-        bottom: 10px;
-        font-size: 12px;
-        padding: 8px 16px;
-      }
     }
     
     /* Very small screens */
     @media (max-width: 480px) {
+      .gallery-header {
+        padding: 5px 8px;
+      }
+
+      .gallery-title {
+        font-size: 11px;
+      }
+
+      .gallery-counter {
+        font-size: 9px;
+        padding: 1px 5px;
+      }
+
+      .zoom-button {
+        width: 22px;
+        height: 22px;
+        font-size: 11px;
+      }
+
+      .zoom-level {
+        font-size: 8px;
+        min-width: 32px;
+      }
+
+      .info-icon {
+        width: 20px;
+        height: 20px;
+        font-size: 11px;
+      }
+
+      .info-tooltip {
+        max-width: 200px;
+        font-size: 10px;
+        padding: 8px 12px;
+      }
+
       .thumbnail {
         width: 50px;
         height: 38px;
       }
-      
+
       .thumbnail-strip {
         min-height: 68px;
         max-height: 80px;
         gap: 8px;
-      }
-      
-      .gallery-counter {
-        font-size: 10px;
-        padding: 2px 6px;
       }
     }
     
@@ -625,21 +738,37 @@ export class GalleryManager {
     
     <div class="gallery-main">
       <div class="image-container">
+        <div class="info-icon">i</div>
+        <div class="info-tooltip">
+          <div class="info-tooltip-title">Image Information</div>
+          <div class="info-tooltip-section">
+            <div class="info-tooltip-label">Filename</div>
+            <div class="info-tooltip-value">${currentImage.filename}</div>
+          </div>
+          ${currentImage.caption ? `
+            <div class="info-tooltip-section">
+              <div class="info-tooltip-label">Caption</div>
+              <div class="info-tooltip-value">${currentImage.caption}</div>
+            </div>
+          ` : ''}
+          <div class="info-tooltip-section">
+            <div class="info-tooltip-label">Keyboard Shortcuts</div>
+            <div class="info-tooltip-value">
+              <span class="info-tooltip-kbd">←</span> <span class="info-tooltip-kbd">→</span> Navigate
+              <br>
+              <span class="info-tooltip-kbd">+</span> <span class="info-tooltip-kbd">−</span> Zoom
+              <br>
+              <span class="info-tooltip-kbd">ESC</span> Close
+            </div>
+          </div>
+        </div>
+
         <img class="main-image" id="main-image" src="${imageUri}" alt="${currentImage.filename}" />
-        
+
         ${totalImages > 1 ? `
           <button class="nav-button prev" onclick="previousImage()" title="Previous Image (← Arrow)">❮</button>
           <button class="nav-button next" onclick="nextImage()" title="Next Image (→ Arrow)">❯</button>
         ` : ''}
-        
-        <div class="image-info">
-          <div class="image-filename">${currentImage.filename}</div>
-          ${currentImage.caption ? `<div class="image-caption">${currentImage.caption}</div>` : ''}
-        </div>
-      </div>
-      
-      <div class="keyboard-hint">
-        Use ← → keys to navigate • ESC to close
       </div>
     </div>
     
