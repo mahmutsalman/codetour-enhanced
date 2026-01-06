@@ -188,16 +188,7 @@ export class AudioPlayerManager {
     <link rel="stylesheet" href="${resources.playerCss}">
 </head>
 <body class="wavesurfer-player">
-    <h2>🎵 WaveSurfer Audio Player</h2>
-    <div class="current-audio-title" id="currentAudioTitle">
-        <span id="titleText">No audio selected</span>
-        <div id="playingIndicator" class="playing-indicator" style="display: none;">
-            <div class="playing-bar"></div>
-            <div class="playing-bar"></div>
-            <div class="playing-bar"></div>
-            <div class="playing-bar"></div>
-        </div>
-    </div>
+    <div class="player-header">🎵 WaveSurfer Audio Player</div>
     
     <div class="player-container">
         <div class="audio-list" id="audioList">
@@ -217,16 +208,17 @@ export class AudioPlayerManager {
             
             <!-- Controls -->
             <div class="waveform-controls">
-                <button id="playPauseBtn" class="play-pause-btn" disabled>
-                    <span class="sr-only">Play/Pause</span>
-                    ▶
-                </button>
-                
-                <div class="control-group">
+                <!-- Left: Primary Playback -->
+                <div class="control-group playback">
+                    <button id="playPauseBtn" class="play-pause-btn" disabled>
+                        <span class="sr-only">Play/Pause</span>
+                        ▶
+                    </button>
                     <div class="time-display" id="timeDisplay">0:00 / 0:00</div>
                 </div>
-                
-                <div class="control-group">
+
+                <!-- Center: Playback Settings -->
+                <div class="control-group settings">
                     <div class="speed-control">
                         <span class="speed-label">Speed:</span>
                         <select id="speedSelector" class="speed-selector">
@@ -240,21 +232,30 @@ export class AudioPlayerManager {
                         </select>
                     </div>
                 </div>
-                
-                <div class="control-group">
+
+                <!-- Right: Audio Settings -->
+                <div class="control-group audio">
                     <div class="volume-control">
                         <span class="volume-icon" id="volumeIcon">🔊</span>
-                        <input type="range" id="volumeSlider" class="volume-slider" 
-                               min="0" max="100" value="100" 
+                        <input type="range" id="volumeSlider" class="volume-slider"
+                               min="0" max="100" value="100"
                                aria-label="Volume">
                     </div>
-                </div>
-                
-                <div class="control-group">
                     <div class="zoom-controls">
                         <button id="zoomOutBtn" class="zoom-btn" title="Zoom Out" aria-label="Zoom Out">-</button>
                         <button id="zoomInBtn" class="zoom-btn" title="Zoom In" aria-label="Zoom In">+</button>
                     </div>
+                </div>
+            </div>
+
+            <!-- Current Playing Audio -->
+            <div class="current-audio-title" id="currentAudioTitle">
+                <span id="titleText">No audio selected</span>
+                <div id="playingIndicator" class="playing-indicator" style="display: none;">
+                    <div class="playing-bar"></div>
+                    <div class="playing-bar"></div>
+                    <div class="playing-bar"></div>
+                    <div class="playing-bar"></div>
                 </div>
             </div>
             

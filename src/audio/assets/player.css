@@ -11,6 +11,13 @@
     gap: 20px;
 }
 
+.player-header {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--vscode-descriptionForeground);
+    margin-bottom: 15px;
+}
+
 .player-container {
     border: 1px solid var(--vscode-panel-border);
     border-radius: 8px;
@@ -54,17 +61,32 @@
 
 /* Controls */
 .waveform-controls {
-    display: flex;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
     align-items: center;
-    gap: 15px;
+    gap: 20px;
     margin: 15px 0;
-    flex-wrap: wrap;
+    padding: 12px 15px;
+    background-color: var(--vscode-input-background);
+    border-radius: 6px;
 }
 
 .control-group {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 12px;
+}
+
+.control-group.playback {
+    justify-content: flex-start;
+}
+
+.control-group.settings {
+    justify-content: center;
+}
+
+.control-group.audio {
+    justify-content: flex-end;
 }
 
 .play-pause-btn {
@@ -282,13 +304,17 @@
 
 /* Current Playing Indicator */
 .current-audio-title {
-    font-size: 18px;
-    font-weight: 600;
-    margin-bottom: 15px;
-    color: var(--vscode-foreground);
+    font-size: 12px;
+    font-weight: 500;
+    margin-top: 15px;
+    margin-bottom: 10px;
+    color: var(--vscode-descriptionForeground);
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
+    padding: 8px 12px;
+    background-color: var(--vscode-input-background);
+    border-radius: 4px;
 }
 
 .playing-indicator {
@@ -380,21 +406,20 @@
 /* Responsive Design */
 @media (max-width: 600px) {
     .waveform-controls {
-        flex-direction: column;
-        align-items: stretch;
-        gap: 10px;
+        grid-template-columns: 1fr;
+        gap: 12px;
     }
-    
+
     .control-group {
-        justify-content: center;
+        justify-content: center !important;
     }
-    
+
     .audio-item {
         flex-direction: column;
         align-items: flex-start;
         text-align: left;
     }
-    
+
     .audio-details {
         flex-direction: column;
         gap: 4px;
