@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 
 import { reaction } from "mobx";
+import * as vscode from "vscode";
 import {
   Disposable,
   Event,
@@ -9,12 +10,13 @@ import {
   MarkdownString,
   TreeDataProvider,
   TreeItem,
-  window
+  window,
+  workspace
 } from "vscode";
-import { EXTENSION_NAME } from "../../constants";
+import { EXTENSION_NAME, TOURS_VIEW_ID } from "../../constants";
 import { generatePreviewContent } from "..";
 import { store, CodeTour } from "../../store";
-import { CodeTourNode, CodeTourStepNode } from "./nodes";
+import { CodeTourNode, CodeTourStepNode, WorkspaceFolderNode } from "./nodes";
 
 class CodeTourTreeProvider implements TreeDataProvider<TreeItem>, Disposable {
   private _disposables: Disposable[] = [];
@@ -65,11 +67,35 @@ class CodeTourTreeProvider implements TreeDataProvider<TreeItem>, Disposable {
     return this.sortTours(filtered);
   }
 
+  /**
+   * Returns true if this is a multi-root workspace (more than one folder)
+   */
+  private isMultiRootWorkspace(): boolean {
+    return (workspace.workspaceFolders?.length ?? 0) > 1;
+  }
+
+  /**
+   * Gets tours belonging to a specific workspace folder
+   */
+  private getToursForWorkspace(workspaceFolder: vscode.WorkspaceFolder, tours: CodeTour[]): CodeTour[] {
+    const folderUri = workspaceFolder.uri.toString();
+    return tours.filter(tour => tour.workspaceFolderUri === folderUri);
+  }
+
   constructor(private extensionPath: string) {
     reaction(
       () => [
-        store.tours,
-        store.hasTours,
+        store.tours.map(tour => [
+          tour.id,
+          tour.title,
+          tour.description,
+          tour.steps?.length ?? 0,
+          tour.isPrimary ?? false,
+          tour.when,
+          tour.createdAt,
+          tour.updatedAt,
+          tour.workspaceFolderUri
+        ]),
         store.isRecording,
         store.tourSortMode,
         store.tourFilter.isActive,
@@ -102,25 +128,77 @@ class CodeTourTreeProvider implements TreeDataProvider<TreeItem>, Disposable {
     if (!element) {
       if (!store.hasTours && !store.activeTour) {
         return undefined;
-      } else {
-        // Start with all tours
-        let allTours = [...store.tours];
+      }
 
-        // Add active tour if it's not in the list
-        if (
-          store.activeTour &&
-          !store.tours.find(tour => tour.id === store.activeTour?.tour.id)
-        ) {
-          allTours.unshift(store.activeTour.tour);
+      // Start with all tours
+      let allTours = [...store.tours];
+
+      // Add active tour if it's not in the list
+      if (
+        store.activeTour &&
+        !store.tours.find(tour => tour.id === store.activeTour?.tour.id)
+      ) {
+        allTours.unshift(store.activeTour.tour);
+      }
+
+      // Apply filtering and sorting
+      const processedTours = this.processTours(allTours);
+
+      if (processedTours.length === 0) {
+        const filterPattern =
+          store.tourFilter.isActive && store.tourFilter.pattern
+            ? store.tourFilter.pattern.trim()
+            : "";
+
+        if (filterPattern) {
+          const item = new TreeItem(`No tours match filter: ${filterPattern}`);
+          item.iconPath = new vscode.ThemeIcon("filter");
+          item.tooltip = "Clear the current tour filter";
+          item.command = {
+            command: `${EXTENSION_NAME}.clearTourFilter`,
+            title: "Clear tour filter"
+          };
+          return [item];
         }
 
-        // Apply filtering and sorting
-        const processedTours = this.processTours(allTours);
+        if (store.hasTours || store.activeTour) {
+          const item = new TreeItem("No tours to display");
+          return [item];
+        }
+      }
+
+      // Multi-root workspace: group tours by workspace folder
+      if (this.isMultiRootWorkspace()) {
+        const workspaceFolders = workspace.workspaceFolders || [];
+        const folderNodes = workspaceFolders
+          .map(folder => {
+            const folderTours = this.getToursForWorkspace(folder, processedTours);
+            return new WorkspaceFolderNode(folder, folderTours);
+          })
+          .filter(node => node.tours.length > 0); // Only show folders with tours
+
+        if (folderNodes.length > 0) {
+          return folderNodes;
+        }
 
         return processedTours.map(
           tour => new CodeTourNode(tour, this.extensionPath)
         );
       }
+
+      // Single workspace: flat list of tours (current behavior)
+      return processedTours.map(
+        tour => new CodeTourNode(tour, this.extensionPath)
+      );
+    } else if (element instanceof WorkspaceFolderNode) {
+      // Return tours for this workspace folder
+      if (element.tours.length === 0) {
+        const item = new TreeItem("No tours in this folder");
+        return [item];
+      }
+      return element.tours.map(
+        tour => new CodeTourNode(tour, this.extensionPath)
+      );
     } else if (element instanceof CodeTourNode) {
       if (element.tour.steps.length === 0) {
         let item;
@@ -147,6 +225,19 @@ class CodeTourTreeProvider implements TreeDataProvider<TreeItem>, Disposable {
   async getParent(element: TreeItem): Promise<TreeItem | null> {
     if (element instanceof CodeTourStepNode) {
       return new CodeTourNode(element.tour, this.extensionPath);
+    } else if (element instanceof CodeTourNode && this.isMultiRootWorkspace()) {
+      // In multi-root workspaces, CodeTourNode's parent is the workspace folder
+      const workspaceFolderUri = element.tour.workspaceFolderUri;
+      if (workspaceFolderUri) {
+        const workspaceFolder = workspace.workspaceFolders?.find(
+          folder => folder.uri.toString() === workspaceFolderUri
+        );
+        if (workspaceFolder) {
+          const folderTours = this.getToursForWorkspace(workspaceFolder, store.tours);
+          return new WorkspaceFolderNode(workspaceFolder, folderTours);
+        }
+      }
+      return null;
     } else {
       return null;
     }
@@ -177,7 +268,7 @@ class CodeTourTreeProvider implements TreeDataProvider<TreeItem>, Disposable {
 
 export function registerTreeProvider(extensionPath: string) {
   const treeDataProvider = new CodeTourTreeProvider(extensionPath);
-  const treeView = window.createTreeView(`${EXTENSION_NAME}.tours`, {
+  const treeView = window.createTreeView(TOURS_VIEW_ID, {
     showCollapseAll: true,
     treeDataProvider,
     canSelectMany: true

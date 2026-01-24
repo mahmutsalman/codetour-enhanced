@@ -3,7 +3,7 @@
   "displayName": "CodeTour Enhanced",
   "description": "Enhanced VS Code extension with audio recording, improved image gallery, tour sorting & filtering, and activity bar integration for guided codebase tours. Based on Microsoft's CodeTour.",
   "publisher": "mahmutsalman",
-  "version": "0.61.0",
+  "version": "0.61.1",
   "author": {
     "name": "Mahmut Salman",
     "email": "mahmut.salman@example.com"
@@ -43,7 +43,8 @@
   ],
   "activationEvents": [
     "onStartupFinished",
-    "onNotebookEditor:codetour"
+    "onNotebookEditor:codetour",
+    "onView:codetourEnhanced.tours"
   ],
   "main": "./dist/extension-node.js",
   "browser": "./dist/extension-web.js",
@@ -625,37 +626,37 @@
       "view/title": [
         {
           "command": "codetour.hideMarkers",
-          "when": "view == codetour.tours && codetour:showingMarkers",
+          "when": "view == codetourEnhanced.tours && codetour:showingMarkers",
           "group": "navigation@1"
         },
         {
           "command": "codetour.showMarkers",
-          "when": "view == codetour.tours && !codetour:showingMarkers",
+          "when": "view == codetourEnhanced.tours && !codetour:showingMarkers",
           "group": "navigation@1"
         },
         {
           "command": "codetour.openTourFile",
-          "when": "view == codetour.tours",
+          "when": "view == codetourEnhanced.tours",
           "group": "navigation@2"
         },
         {
           "command": "codetour.recordTour",
-          "when": "view == codetour.tours",
+          "when": "view == codetourEnhanced.tours",
           "group": "navigation@3"
         },
         {
           "command": "codetour.sortTours",
-          "when": "view == codetour.tours",
+          "when": "view == codetourEnhanced.tours",
           "group": "navigation@4"
         },
         {
           "command": "codetour.filterTours",
-          "when": "view == codetour.tours",
+          "when": "view == codetourEnhanced.tours",
           "group": "navigation@5"
         },
         {
           "command": "codetour.clearTourFilter",
-          "when": "view == codetour.tours && codetour:hasActiveFilter",
+          "when": "view == codetourEnhanced.tours && codetour:hasActiveFilter",
           "group": "navigation@6"
         }
       ],
@@ -808,24 +809,23 @@
     "viewsContainers": {
       "activitybar": [
         {
-          "id": "codetour",
+          "id": "codetourEnhanced",
           "title": "CodeTour Enhanced",
           "icon": "images/codetour-icon.svg"
         }
       ]
     },
     "views": {
-      "codetour": [
+      "codetourEnhanced": [
         {
-          "id": "codetour.tours",
-          "name": "Tours",
-          "when": "workspaceFolderCount != 0 || codetour:inTour"
+          "id": "codetourEnhanced.tours",
+          "name": "Tours"
         }
       ]
     },
     "viewsWelcome": [
       {
-        "view": "codetour.tours",
+        "view": "codetourEnhanced.tours",
         "contents": "In order to create a guided walkthrough, you can begin recording a tour for the currently opened workspace ([Learn More](https://github.com/vsls-contrib/codetour#recording-tours)).\n\n[Record Tour](command:codetour.recordTour)\n\nYou can also open tours that were shared with you by others ([Learn More](https://github.com/vsls-contrib/codetour#opening-tours)).\n\n[Open Tour File](command:codetour.openTourFile)\n\n[Open Tour URL](command:codetour.openTourUrl)"
       }
     ],

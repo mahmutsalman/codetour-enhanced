@@ -4,6 +4,7 @@
 import { Uri } from "vscode";
 
 export const EXTENSION_NAME = "codetour";
+export const TOURS_VIEW_ID = "codetourEnhanced.tours";
 
 export const FS_SCHEME = EXTENSION_NAME;
 export const FS_SCHEME_CONTENT = `${FS_SCHEME}-content`;
