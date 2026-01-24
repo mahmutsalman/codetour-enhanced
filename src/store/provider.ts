@@ -43,8 +43,8 @@ if (customDirectory) {
 export async function discoverTours(): Promise<void> {
   const tours = await Promise.all(
     vscode.workspace.workspaceFolders!.map(async workspaceFolder => {
-      const mainTours = await discoverMainTours(workspaceFolder.uri);
-      const tours = await discoverSubTours(workspaceFolder.uri);
+      const mainTours = await discoverMainTours(workspaceFolder);
+      const tours = await discoverSubTours(workspaceFolder);
 
       if (mainTours) {
         tours.push(...mainTours);
@@ -85,17 +85,21 @@ export async function discoverTours(): Promise<void> {
 }
 
 async function discoverMainTours(
-  workspaceUri: vscode.Uri
+  workspaceFolder: vscode.WorkspaceFolder
 ): Promise<CodeTour[]> {
   const tours = await Promise.all(
     MAIN_TOUR_FILES.map(async tourFile => {
       try {
-        const uri = vscode.Uri.joinPath(workspaceUri, tourFile);
+        const uri = vscode.Uri.joinPath(workspaceFolder.uri, tourFile);
 
         const mainTourContent = await readUriContents(uri);
         const tour = JSON.parse(mainTourContent);
         tour.id = decodeURIComponent(uri.toString());
-        
+
+        // Attach workspace folder metadata for multi-root workspace support
+        tour.workspaceFolderUri = workspaceFolder.uri.toString();
+        tour.workspaceFolderName = workspaceFolder.name;
+
         // Extract file metadata if not present in the tour
         if (!tour.createdAt || !tour.updatedAt) {
           try {
@@ -117,7 +121,7 @@ async function discoverMainTours(
             }
           }
         }
-        
+
         return tour;
       } catch {}
     })
@@ -126,37 +130,44 @@ async function discoverMainTours(
   return tours.filter(tour => tour);
 }
 
-async function readTourDirectory(uri: vscode.Uri): Promise<CodeTour[]> {
+async function readTourDirectory(
+  uri: vscode.Uri,
+  workspaceFolder: vscode.WorkspaceFolder
+): Promise<CodeTour[]> {
   try {
     const tourFiles = await vscode.workspace.fs.readDirectory(uri);
     const tours = await Promise.all(
       tourFiles.map(async ([file, type]) => {
         const fileUri = vscode.Uri.joinPath(uri, file);
         if (type === vscode.FileType.File) {
-          return readTourFile(fileUri);
+          return readTourFile(fileUri, workspaceFolder);
         } else if (type === vscode.FileType.SymbolicLink) {
-          return readTourFile(fileUri)
+          return readTourFile(fileUri, workspaceFolder);
         } else {
-          return readTourDirectory(fileUri);
+          return readTourDirectory(fileUri, workspaceFolder);
         }
       })
     );
 
-    // @ts-ignore
-    return tours.flat().filter(tour => tour);
+    return tours.flat().filter((tour): tour is CodeTour => tour !== undefined);
   } catch {
     return [];
   }
 }
 
 async function readTourFile(
-  tourUri: vscode.Uri
+  tourUri: vscode.Uri,
+  workspaceFolder: vscode.WorkspaceFolder
 ): Promise<CodeTour | undefined> {
   try {
     const tourContent = await readUriContents(tourUri);
     const tour = JSON.parse(tourContent);
     tour.id = decodeURIComponent(tourUri.toString());
-    
+
+    // Attach workspace folder metadata for multi-root workspace support
+    tour.workspaceFolderUri = workspaceFolder.uri.toString();
+    tour.workspaceFolderName = workspaceFolder.name;
+
     // Extract file metadata if not present in the tour
     if (!tour.createdAt || !tour.updatedAt) {
       try {
@@ -178,16 +189,20 @@ async function readTourFile(
         }
       }
     }
-    
+
     return tour;
-  } catch {}
+  } catch {
+    return undefined;
+  }
 }
 
-async function discoverSubTours(workspaceUri: vscode.Uri): Promise<CodeTour[]> {
+async function discoverSubTours(
+  workspaceFolder: vscode.WorkspaceFolder
+): Promise<CodeTour[]> {
   const tours = await Promise.all(
     SUB_TOUR_DIRECTORIES.map(directory => {
-      const uri = vscode.Uri.joinPath(workspaceUri, directory);
-      return readTourDirectory(uri);
+      const uri = vscode.Uri.joinPath(workspaceFolder.uri, directory);
+      return readTourDirectory(uri, workspaceFolder);
     })
   );
 

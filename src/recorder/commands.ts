@@ -19,6 +19,7 @@ import {
   startCodeTour
 } from "../store/actions";
 import { getActiveWorkspacePath, getRelativePath } from "../utils";
+import { discoverTours } from "../store/provider";
 
 export async function saveTour(tour: CodeTour) {
   const uri = vscode.Uri.parse(tour.id);
@@ -115,6 +116,15 @@ export function registerRecorderCommands() {
       (tour as any).ref = ref;
     }
 
+    // Ensure the parent directory exists before writing the file
+    const parentUri = vscode.Uri.joinPath(uri, "..");
+    try {
+      await vscode.workspace.fs.stat(parentUri);
+    } catch {
+      // Directory doesn't exist, create it
+      await vscode.workspace.fs.createDirectory(parentUri);
+    }
+
     const tourContent = JSON.stringify(tour, null, 2);
     const bytes = new TextEncoder().encode(tourContent);
     await vscode.workspace.fs.writeFile(uri, bytes);
@@ -208,18 +218,17 @@ export function registerRecorderCommands() {
     }
 
     try {
-      console.log("DEBUG: About to write tour file");
       const tour = await writeTourFile(workspaceRoot, tourTitle, ref);
-      console.log("DEBUG: Tour file written:", tour);
-
-      console.log("DEBUG: Starting CodeTour");
       startCodeTour(tour, 0, workspaceRoot, true);
+
+      // Refresh tour list so the new tour appears in tree view
+      await discoverTours();
 
       vscode.window.showInformationMessage(
         "CodeTour recording started! Begin creating steps by opening a file, clicking the + button to the left of a line of code, and then adding the appropriate comments."
       );
     } catch (error) {
-      console.error("DEBUG: Failed to create tour:", error);
+      console.error("Failed to create tour:", error);
       vscode.window.showErrorMessage(`Failed to create tour: ${error}`);
     }
   }
