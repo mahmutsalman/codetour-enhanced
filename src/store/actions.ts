@@ -16,7 +16,8 @@ import {
   getStepFileUri,
   getWorkspaceKey,
   getWorkspaceUri,
-  readUriContents
+  readUriContents,
+  validateTourWorkspace
 } from "../utils";
 import { progress } from "./storage";
 
@@ -48,6 +49,16 @@ export function startCodeTour(
   canEditTour: boolean = true,
   tours?: CodeTour[]
 ) {
+  // Validate workspace before starting tour (multi-root workspace support)
+  if (!validateTourWorkspace(tour)) {
+    const workspaceName = tour.workspaceFolderName || "unknown";
+    window.showErrorMessage(
+      `Cannot start tour "${tour.title}": workspace folder "${workspaceName}" not found. ` +
+      `The workspace folder may have been removed or the tour file moved.`
+    );
+    return;
+  }
+
   startPlayer();
 
   if (!workspaceRoot) {

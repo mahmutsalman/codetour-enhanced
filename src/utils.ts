@@ -112,12 +112,64 @@ export function getWorkspacePath(tour: CodeTour) {
   return getWorkspaceUri(tour)?.toString() || "";
 }
 
+/**
+ * Gets the workspace URI for a tour.
+ * In multi-root workspaces, this uses the tour's workspace metadata if available,
+ * otherwise tries to resolve from the tour's file location.
+ *
+ * IMPORTANT: Does NOT fallback to workspaceFolders[0] to avoid cross-workspace issues.
+ */
 export function getWorkspaceUri(tour: CodeTour): Uri | undefined {
+  // First, try to use the tour's workspace folder metadata (for multi-root support)
+  if (tour.workspaceFolderUri) {
+    return Uri.parse(tour.workspaceFolderUri);
+  }
+
+  // Fall back to resolving from tour file location
   const tourUri = Uri.parse(tour.id);
-  return (
-    workspace.getWorkspaceFolder(tourUri)?.uri ||
-    (workspace.workspaceFolders && workspace.workspaceFolders[0].uri)
-  );
+  const workspaceFolder = workspace.getWorkspaceFolder(tourUri);
+
+  if (workspaceFolder) {
+    return workspaceFolder.uri;
+  }
+
+  // In single-workspace scenarios, use the only workspace folder
+  if (workspace.workspaceFolders?.length === 1) {
+    return workspace.workspaceFolders[0].uri;
+  }
+
+  // Cannot determine workspace - return undefined rather than guessing
+  return undefined;
+}
+
+/**
+ * Validates that a tour's workspace folder still exists and is accessible.
+ * Returns true if the tour can be safely started/played.
+ */
+export function validateTourWorkspace(tour: CodeTour): boolean {
+  // If tour has workspace metadata, verify the folder still exists
+  if (tour.workspaceFolderUri) {
+    const folderExists = workspace.workspaceFolders?.some(
+      folder => folder.uri.toString() === tour.workspaceFolderUri
+    );
+    return !!folderExists;
+  }
+
+  // Try to resolve workspace from tour ID
+  const tourUri = Uri.parse(tour.id);
+  const workspaceFolder = workspace.getWorkspaceFolder(tourUri);
+
+  if (workspaceFolder) {
+    return true;
+  }
+
+  // In single workspace, assume it's valid
+  if (workspace.workspaceFolders?.length === 1) {
+    return true;
+  }
+
+  // Cannot validate - workspace is unknown
+  return false;
 }
 
 function getTourNumber(tour: CodeTour): number | undefined {

@@ -1,6 +1,7 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+import * as vscode from "vscode";
 import {
   ThemeColor,
   ThemeIcon,
@@ -12,6 +13,27 @@ import { CONTENT_URI, EXTENSION_NAME, FS_SCHEME } from "../../constants";
 import { CodeTour, store } from "../../store";
 import { progress } from "../../store/storage";
 import { getFileUri, getStepLabel, getWorkspaceUri } from "../../utils";
+
+/**
+ * Tree node representing a workspace folder in multi-root workspaces.
+ * Groups tours belonging to a specific workspace folder.
+ */
+export class WorkspaceFolderNode extends TreeItem {
+  constructor(
+    public readonly workspaceFolder: vscode.WorkspaceFolder,
+    public readonly tours: CodeTour[]
+  ) {
+    super(workspaceFolder.name, TreeItemCollapsibleState.Expanded);
+
+    this.contextValue = "codetour.workspaceFolder";
+    this.iconPath = new ThemeIcon("folder-library");
+    this.description = `${tours.length} tour${tours.length !== 1 ? "s" : ""}`;
+    this.tooltip = `${workspaceFolder.name} - ${tours.length} tour${tours.length !== 1 ? "s" : ""}`;
+
+    // Set resource URI for identification
+    this.resourceUri = workspaceFolder.uri;
+  }
+}
 
 function isRecording(tour: CodeTour) {
   return (

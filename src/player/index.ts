@@ -30,7 +30,8 @@ import {
   getFileUri,
   getStepFileUri,
   getStepLabel,
-  getTourTitle
+  getTourTitle,
+  getWorkspaceUri
 } from "../utils";
 import { registerCodeStatusModule } from "./codeStatus";
 import { registerPlayerCommands } from "./commands";
@@ -59,8 +60,14 @@ const CODE_FENCE_PATTERN = /```[^\n]+\n(.+)\n```/gms;
 /**
  * Generates audio player markdown for a tour step
  */
-function generateAudioGallery(step: CodeTourStep): string {
+function generateAudioGallery(step: CodeTourStep, tour: CodeTour): string {
   if (!step.audios || step.audios.length === 0) {
+    return "";
+  }
+
+  // Get workspace from tour metadata (multi-root workspace support)
+  const workspaceUri = getWorkspaceUri(tour);
+  if (!workspaceUri) {
     return "";
   }
 
@@ -68,8 +75,6 @@ function generateAudioGallery(step: CodeTourStep): string {
   audioContent += `🎵 **Audio Recordings (${step.audios.length})**\n\n`;
 
   for (const audio of step.audios) {
-    const workspaceFolder = workspace.workspaceFolders?.[0];
-    if (!workspaceFolder) continue;
     
     // Format duration
     const minutes = Math.floor(audio.duration / 60);
@@ -101,8 +106,14 @@ function generateAudioGallery(step: CodeTourStep): string {
 /**
  * Generates image gallery with grid layout for compact display
  */
-function generateImageGallery(step: CodeTourStep): string {
+function generateImageGallery(step: CodeTourStep, tour: CodeTour): string {
   if (!step.images || step.images.length === 0) {
+    return "";
+  }
+
+  // Get workspace from tour metadata (multi-root workspace support)
+  const workspaceUri = getWorkspaceUri(tour);
+  if (!workspaceUri) {
     return "";
   }
 
@@ -116,12 +127,9 @@ function generateImageGallery(step: CodeTourStep): string {
   const maxColumns = 3;
 
   for (const image of step.images) {
-    const workspaceFolder = workspace.workspaceFolders?.[0];
-    if (!workspaceFolder) continue;
-
     // Use thumbnail path for display, fallback to original if no thumbnail
     const displayPath = image.thumbnail || image.path;
-    const imageUri = Uri.joinPath(workspaceFolder.uri, displayPath);
+    const imageUri = Uri.joinPath(workspaceUri, displayPath);
     const viewCommand = `command:codetour.viewImage?${encodeURIComponent(JSON.stringify([image.path]))}`;
 
     // Start new row if needed
@@ -487,8 +495,8 @@ async function renderCurrentStep() {
     content += generateEditModeAttachmentSummary(step);
   } else {
     // In preview mode, show full galleries with HTML formatting
-    content += generateAudioGallery(step);
-    content += generateImageGallery(step);
+    content += generateAudioGallery(step, currentTour);
+    content += generateImageGallery(step, currentTour);
   }
 
   const comment = new CodeTourComment(

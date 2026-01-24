@@ -76,6 +76,10 @@ export interface CodeTour {
   when?: string;
   createdAt?: number;
   updatedAt?: number;
+
+  // Multi-root workspace support: workspace folder this tour belongs to
+  workspaceFolderUri?: string;    // URI of the workspace folder
+  workspaceFolderName?: string;   // Display name of the workspace folder
 }
 
 export interface ActiveTour {
