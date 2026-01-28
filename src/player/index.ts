@@ -21,7 +21,7 @@ import {
   window,
   workspace
 } from "vscode";
-import { SMALL_ICON_URL, IMAGE_DISPLAY } from "../constants";
+import { SMALL_ICON_URL, CODE_BLOCK_COLLAPSE_THRESHOLD, MAX_INLINE_CODE_BLOCKS, CONTENT_LENGTH_THRESHOLD } from "../constants";
 import { CodeTour, CodeTourStep, store } from "../store";
 import { initializeStorage } from "../store/storage";
 import {
@@ -30,8 +30,7 @@ import {
   getFileUri,
   getStepFileUri,
   getStepLabel,
-  getTourTitle,
-  getWorkspaceUri
+  getTourTitle
 } from "../utils";
 import { registerCodeStatusModule } from "./codeStatus";
 import { registerPlayerCommands } from "./commands";
@@ -58,122 +57,56 @@ const FILE_REFERENCE_PATTERN = /(\!)?(\[[^\]]+\]\()(\.[^\)]+)(?=\))/gm;
 const CODE_FENCE_PATTERN = /```[^\n]+\n(.+)\n```/gms;
 
 /**
- * Generates audio player markdown for a tour step
+ * Wraps code blocks exceeding the threshold in <details> tags for collapsible display.
+ * This helps mitigate VS Code's CommentThread max-height limitation.
  */
-function generateAudioGallery(step: CodeTourStep, tour: CodeTour): string {
-  if (!step.audios || step.audios.length === 0) {
-    return "";
-  }
+function wrapLongCodeBlocks(content: string): string {
+  // Count total code blocks to detect dense content
+  const codeBlockCount = (content.match(/```\w*\n[\s\S]*?```/g) || []).length;
 
-  // Get workspace from tour metadata (multi-root workspace support)
-  const workspaceUri = getWorkspaceUri(tour);
-  if (!workspaceUri) {
-    return "";
-  }
+  // If many code blocks, collapse ALL to avoid compound scroll miscalculation
+  const effectiveThreshold = codeBlockCount > MAX_INLINE_CODE_BLOCKS
+    ? 0
+    : CODE_BLOCK_COLLAPSE_THRESHOLD;
 
-  let audioContent = "\n\n---\n\n";
-  audioContent += `🎵 **Audio Recordings (${step.audios.length})**\n\n`;
+  return content.replace(
+    /```(\w*)\n([\s\S]*?)```/g,
+    (match, lang, code) => {
+      const lineCount = code.split('\n').length;
+      if (lineCount <= effectiveThreshold) {
+        return match;
+      }
 
-  for (const audio of step.audios) {
-    
-    // Format duration
-    const minutes = Math.floor(audio.duration / 60);
-    const seconds = Math.floor(audio.duration % 60);
-    const durationText = `${minutes}:${seconds.toString().padStart(2, '0')}`;
-    
-    // Create audio player link
-    audioContent += `🎧 [**${audio.filename}**](command:codetour.playAudio?${encodeURIComponent(JSON.stringify([audio.path]))} "Play ${audio.filename}") `;
-    audioContent += `*(${durationText}, ${audio.format.toUpperCase()})*`;
-    
-    // Add transcript if available
-    if (audio.transcript) {
-      audioContent += `  \n💬 *"${audio.transcript.length > 100 ? audio.transcript.substring(0, 100) + '...' : audio.transcript}"*`;
+      const langLabel = lang || 'Code';
+      return `<details>
+<summary>📄 ${langLabel} (${lineCount} lines - click to expand)</summary>
+
+\`\`\`${lang}
+${code}\`\`\`
+
+</details>`;
     }
-    
-    // Add audio management commands for editing mode
-    if (store.isRecording && store.isEditing) {
-      const removeArgs = encodeURIComponent(JSON.stringify([audio.id]));
-      const transcriptArgs = encodeURIComponent(JSON.stringify([audio.id]));
-      audioContent += `  \n[$(edit) Edit Transcript](command:codetour.updateAudioTranscript?${transcriptArgs}) | [$(trash) Remove](command:codetour.removeAudio?${removeArgs})`;
-    }
-    
-    audioContent += "\n\n";
-  }
-
-  return audioContent;
+  );
 }
 
 /**
- * Generates image gallery with grid layout for compact display
+ * Generates a compact media link instead of inline galleries.
+ * Reduces content height to help with CommentThread scroll limitations.
  */
-function generateImageGallery(step: CodeTourStep, tour: CodeTour): string {
-  if (!step.images || step.images.length === 0) {
-    return "";
-  }
+function generateCompactMediaLink(step: CodeTourStep): string {
+  const imageCount = step.images?.length || 0;
+  const audioCount = step.audios?.length || 0;
 
-  // Get workspace from tour metadata (multi-root workspace support)
-  const workspaceUri = getWorkspaceUri(tour);
-  if (!workspaceUri) {
-    return "";
-  }
+  if (imageCount === 0 && audioCount === 0) return "";
 
-  let galleryContent = "\n\n---\n\n";
-  galleryContent += `📎 **Attachments (${step.images.length})**\n\n`;
+  let parts = [];
+  if (imageCount > 0) parts.push(`${imageCount} image${imageCount > 1 ? 's' : ''}`);
+  if (audioCount > 0) parts.push(`${audioCount} audio${audioCount > 1 ? 's' : ''}`);
 
-  // Use table layout for better VS Code comment HTML support
-  galleryContent += `<table style="border-collapse: collapse; border: none;"><tr>`;
+  const stepIndex = store.activeTour?.step || 0;
+  const args = encodeURIComponent(JSON.stringify([stepIndex]));
 
-  let columnCount = 0;
-  const maxColumns = 3;
-
-  for (const image of step.images) {
-    // Use thumbnail path for display, fallback to original if no thumbnail
-    const displayPath = image.thumbnail || image.path;
-    const imageUri = Uri.joinPath(workspaceUri, displayPath);
-    const viewCommand = `command:codetour.viewImage?${encodeURIComponent(JSON.stringify([image.path]))}`;
-
-    // Start new row if needed
-    if (columnCount > 0 && columnCount % maxColumns === 0) {
-      galleryContent += `</tr><tr>`;
-    }
-
-    // Table cell with thumbnail
-    galleryContent += `<td style="padding: ${IMAGE_DISPLAY.GRID_GAP}px; vertical-align: top; border: none;">`;
-
-    // Clickable image with filename in tooltip
-    galleryContent += `<a href="${viewCommand}" title="${image.filename} - Click to view full size" style="display: block; text-decoration: none;">`;
-    galleryContent += `<img src="${imageUri.toString()}" alt="${image.caption || image.filename}" style="width: ${IMAGE_DISPLAY.GRID_THUMBNAIL_WIDTH}px; height: auto; border: 1px solid #454545; border-radius: 4px; display: block;" />`;
-    galleryContent += `</a>`;
-
-    // Add caption if present (truncated)
-    if (image.caption) {
-      const maxCaptionLength = 20;
-      const truncatedCaption = image.caption.length > maxCaptionLength
-        ? image.caption.substring(0, 17) + "..."
-        : image.caption;
-
-      galleryContent += `<div style="margin-top: 2px; font-size: 0.7em; color: #888; font-style: italic; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: ${IMAGE_DISPLAY.GRID_THUMBNAIL_WIDTH}px;" title="${image.caption}">${truncatedCaption}</div>`;
-    }
-
-    // Add image management commands for editing mode
-    if (store.isRecording && store.isEditing) {
-      const removeArgs = encodeURIComponent(JSON.stringify([image.id]));
-      const captionArgs = encodeURIComponent(JSON.stringify([image.id]));
-
-      galleryContent += `<div style="margin-top: 4px; font-size: 0.7em;">`;
-      galleryContent += `<a href="command:codetour.updateImageCaption?${captionArgs}" style="text-decoration: none; margin-right: 8px;" title="Edit Caption">$(edit)</a>`;
-      galleryContent += `<a href="command:codetour.removeImage?${removeArgs}" style="text-decoration: none; color: #f48771;" title="Remove Image">$(trash)</a>`;
-      galleryContent += `</div>`;
-    }
-
-    galleryContent += `</td>`;
-    columnCount++;
-  }
-
-  // Close table
-  galleryContent += `</tr></table>\n\n`;
-
-  return galleryContent;
+  return `\n\n---\n📎 [View Attachments (${parts.join(', ')})](command:codetour.viewStepMedia?${args} "Open media gallery")`;
 }
 
 /**
@@ -433,7 +366,10 @@ async function renderCurrentStep() {
       ? CommentMode.Editing
       : CommentMode.Preview;
   const baseDescription = stripGeneratedMediaSections(step.description);
-  let content = baseDescription;
+
+  // Layer 1: Wrap long code blocks in collapsible <details> tags
+  // This helps mitigate VS Code's CommentThread max-height limitation
+  let content = wrapLongCodeBlocks(baseDescription);
 
   let hasPreviousStep = currentStep > 0;
   const hasNextStep = currentStep < currentTour.steps.length - 1;
@@ -494,9 +430,15 @@ async function renderCurrentStep() {
     // In edit mode, show simplified summary to avoid HTML in editable content
     content += generateEditModeAttachmentSummary(step);
   } else {
-    // In preview mode, show full galleries with HTML formatting
-    content += generateAudioGallery(step, currentTour);
-    content += generateImageGallery(step, currentTour);
+    // Layer 2: Use compact media link instead of inline galleries
+    // This reduces content height to help with CommentThread scroll limitations
+    content += generateCompactMediaLink(step);
+  }
+
+  // Layer 3: Add "View Full Content" link for very long steps
+  if (content.length > CONTENT_LENGTH_THRESHOLD) {
+    const args = encodeURIComponent(JSON.stringify([currentStep]));
+    content += `\n\n---\n[📖 View Full Content in Panel](command:codetour.viewFullContent?${args} "Open full content in a dedicated panel")`;
   }
 
   const comment = new CodeTourComment(

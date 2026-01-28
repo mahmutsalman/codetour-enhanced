@@ -17,6 +17,11 @@ export const SMALL_ICON_URL =
 
 export const VSCODE_DIRECTORY = ".vscode";
 
+// Content optimization thresholds for CommentThread scroll limitations
+export const CODE_BLOCK_COLLAPSE_THRESHOLD = 5; // lines - code blocks longer than this will be collapsed
+export const MAX_INLINE_CODE_BLOCKS = 2; // if more code blocks than this, collapse ALL
+export const CONTENT_LENGTH_THRESHOLD = 1500; // characters - content longer than this shows "View Full Content" link
+
 // Image display configuration for CodeTour comments
 export const IMAGE_DISPLAY = {
   // Default max dimensions for images in comments (reduced for better UX)

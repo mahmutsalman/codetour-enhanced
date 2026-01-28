@@ -35,6 +35,9 @@ Thumbs.db
 *.swp
 *.swo
 
+# Debug artifacts
+codetour-debug.txt
+
 # Logs
 *.log
 npm-debug.log*

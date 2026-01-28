@@ -5,6 +5,7 @@ import { when } from "mobx";
 import * as vscode from "vscode";
 import { EXTENSION_NAME } from "../constants";
 import { focusPlayer } from "../player";
+import { showFullContentPanel, showMediaGalleryPanel } from "./contentWebview";
 import { saveTour } from "../recorder/commands";
 import { CodeTour, store, TourSortMode } from "../store";
 import {
@@ -359,14 +360,32 @@ export function registerPlayerCommands() {
 
   vscode.commands.registerCommand(`${EXTENSION_NAME}.clearTourFilter`, () => {
     store.tourFilter = { isActive: false };
-    
+
     // Store user preference asynchronously to avoid triggering config reload
     setTimeout(() => {
       vscode.workspace.getConfiguration("codetour").update(
-        "tourFilter", 
-        { isActive: false }, 
+        "tourFilter",
+        { isActive: false },
         vscode.ConfigurationTarget.Global
       );
     }, 100);
   });
+
+  // View step media in a dedicated webview panel
+  // This helps mitigate VS Code's CommentThread max-height limitation
+  vscode.commands.registerCommand(
+    `${EXTENSION_NAME}.viewStepMedia`,
+    async (stepIndex?: number) => {
+      showMediaGalleryPanel(stepIndex);
+    }
+  );
+
+  // View full step content in a dedicated webview panel
+  // This is a fallback for steps with very long content
+  vscode.commands.registerCommand(
+    `${EXTENSION_NAME}.viewFullContent`,
+    async (stepIndex?: number) => {
+      showFullContentPanel(stepIndex);
+    }
+  );
 }

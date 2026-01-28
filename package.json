@@ -376,6 +376,18 @@
         "title": "Clear Tour Filter",
         "category": "CodeTour Enhanced",
         "icon": "$(clear-all)"
+      },
+      {
+        "command": "codetour.viewStepMedia",
+        "title": "View Step Media",
+        "category": "CodeTour Enhanced",
+        "icon": "$(files)"
+      },
+      {
+        "command": "codetour.viewFullContent",
+        "title": "View Full Content",
+        "category": "CodeTour Enhanced",
+        "icon": "$(book)"
       }
     ],
     "menus": {
@@ -523,6 +535,14 @@
         {
           "command": "codetour.viewImage",
           "when": "false"
+        },
+        {
+          "command": "codetour.viewStepMedia",
+          "when": "codetour:inTour"
+        },
+        {
+          "command": "codetour.viewFullContent",
+          "when": "codetour:inTour"
         }
       ],
       "comments/commentThread/title": [
