@@ -3,7 +3,7 @@ import * as vscode from "vscode";
 import { store, CodeTourStepImage } from "../store";
 import { IMAGE_COLOR_PRESETS } from "../constants";
 import { saveTour } from "../recorder/commands";
-import { addImageToStep, removeImageFromStep } from "../utils/imageStorage";
+import { addImageToStep, removeImageFromStep, updateImageColor } from "../utils/imageStorage";
 import { getClipboardImage } from "../utils/clipboard";
 import { ImageGalleryPanelProvider } from "./imageGalleryPanel";
 
@@ -103,6 +103,21 @@ export class StepImagesViewProvider implements vscode.WebviewViewProvider {
 
       case "addImage": {
         await this._addImageSmartly();
+        break;
+      }
+
+      case "cycleColor": {
+        if (!store.activeTour) return;
+        const images = this._getImages();
+        const img = images.find(i => i.id === message.imageId);
+        if (!img) return;
+        const colorKeys = Object.keys(IMAGE_COLOR_PRESETS);
+        const currentIdx = img.color ? colorKeys.indexOf(img.color) : -1;
+        const nextIdx = currentIdx + 1;
+        const nextColor = nextIdx < colorKeys.length ? colorKeys[nextIdx] : undefined;
+        updateImageColor(store.activeTour.tour, store.activeTour.step, message.imageId, nextColor);
+        await saveTour(store.activeTour.tour);
+        this._updateContent();
         break;
       }
     }
@@ -306,7 +321,7 @@ export class StepImagesViewProvider implements vscode.WebviewViewProvider {
         ? `<span class="caption">${escapeHtml(img.caption)}</span>`
         : "";
       return `<div class="thumb-card">
-        <div class="thumb-wrapper ${borderClass}">
+        <div class="thumb-wrapper ${borderClass}" data-image-id="${img.id}">
           <img class="thumb" src="${thumbUri}" alt="${escapeHtml(img.filename)}"
                data-action="openInGallery" data-index="${idx}" title="Click to view in gallery" />
           <button class="remove-btn" data-action="remove" data-image-id="${img.id}" title="Remove">&times;</button>
@@ -439,6 +454,20 @@ export class StepImagesViewProvider implements vscode.WebviewViewProvider {
                 vscode.postMessage({ type: 'addFromFile' });
                 break;
             }
+            return;
+          }
+          el = el.parentElement;
+        }
+      });
+
+      // Right-click to cycle border color
+      document.addEventListener('contextmenu', function(e) {
+        var el = e.target;
+        for (var i = 0; i < 4 && el && el !== document; i++) {
+          var imageId = el.getAttribute && el.getAttribute('data-image-id');
+          if (imageId && el.classList.contains('thumb-wrapper')) {
+            e.preventDefault();
+            vscode.postMessage({ type: 'cycleColor', imageId: imageId });
             return;
           }
           el = el.parentElement;
