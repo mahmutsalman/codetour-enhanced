@@ -5,7 +5,7 @@ import { IMAGE_COLOR_PRESETS } from "../constants";
 import { saveTour } from "../recorder/commands";
 import { addImageToStep, updateImageColor, updateImageCaption } from "../utils/imageStorage";
 import { getClipboardImage } from "../utils/clipboard";
-import { convertAudiosToDataUrls } from "../utils/audioStorage";
+import { convertAudiosToDataUrls, updateAudioCaption } from "../utils/audioStorage";
 
 export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = "codetourEnhanced.imageGallery";
@@ -81,7 +81,7 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
           step?.images?.length ?? 0,
           step?.images?.map(i => `${i.id}:${i.color ?? ""}:${i.caption ?? ""}`).join(","),
           step?.audios?.length ?? 0,
-          step?.audios?.map(a => a.id).join(",")
+          step?.audios?.map(a => `${a.id}:${a.caption ?? ""}`).join(",")
         ];
       },
       () => this._updateContent()
@@ -199,6 +199,14 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
         if (!store.activeTour) return;
         const { imageId: captionImageId, caption } = message;
         updateImageCaption(store.activeTour.tour, store.activeTour.step, captionImageId, caption || undefined);
+        await saveTour(store.activeTour.tour);
+        break;
+      }
+
+      case "setAudioCaption": {
+        if (!store.activeTour) return;
+        const { audioId: captionAudioId, caption: audioCaption } = message;
+        updateAudioCaption(store.activeTour.tour, store.activeTour.step, captionAudioId, audioCaption || undefined);
         await saveTour(store.activeTour.tour);
         break;
       }
@@ -820,6 +828,9 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
             <div class="playing-bar"></div>
           </div>
         </div>
+        <div class="caption-bar audio-caption-bar">
+          <input class="caption-input" id="audioCaptionInput" type="text" placeholder="Add a caption..." value="" data-audio-id="" />
+        </div>
         <div id="transcriptBox" class="transcript-box" style="display:none;">
           <div class="transcript-label">Transcript</div>
           <div id="transcriptText"></div>
@@ -883,7 +894,8 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
         transcriptText: document.getElementById('transcriptText'),
         errorMessage: document.getElementById('errorMessage'),
         waveformProgress: document.getElementById('waveformProgress'),
-        waveformCursor: document.getElementById('waveformCursor')
+        waveformCursor: document.getElementById('waveformCursor'),
+        audioCaptionInput: document.getElementById('audioCaptionInput')
       };
 
       // ── Message handler ──
@@ -1080,6 +1092,8 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
         var cur = audios[audioIndex];
         if (cur) {
           el.titleText.textContent = cur.filename;
+          el.audioCaptionInput.value = cur.caption || '';
+          el.audioCaptionInput.setAttribute('data-audio-id', cur.id);
           if (cur.transcript) {
             el.transcriptBox.style.display = 'block';
             el.transcriptText.textContent = cur.transcript;
@@ -1117,6 +1131,8 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
         var cur = audios[audioIndex];
         if (cur) {
           el.titleText.textContent = cur.filename;
+          el.audioCaptionInput.value = cur.caption || '';
+          el.audioCaptionInput.setAttribute('data-audio-id', cur.id);
           if (cur.transcript) {
             el.transcriptBox.style.display = 'block';
             el.transcriptText.textContent = cur.transcript;
@@ -1342,6 +1358,19 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
         }, 500);
       });
 
+      // Audio caption input debounce
+      var audioCaptionTimer;
+      el.audioCaptionInput.addEventListener('input', function() {
+        clearTimeout(audioCaptionTimer);
+        audioCaptionTimer = setTimeout(function() {
+          vscode.postMessage({
+            type: 'setAudioCaption',
+            audioId: el.audioCaptionInput.getAttribute('data-audio-id'),
+            caption: el.audioCaptionInput.value
+          });
+        }, 500);
+      });
+
       // Audio playback controls
       el.playPauseBtn.addEventListener('click', function() {
         if (wavesurfer) wavesurfer.playPause();
@@ -1399,7 +1428,7 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
 
       // ── Keyboard shortcuts ──
       document.addEventListener('keydown', function(e) {
-        if (e.target === el.captionInput || e.target.tagName === 'SELECT') return;
+        if (e.target === el.captionInput || e.target === el.audioCaptionInput || e.target.tagName === 'SELECT') return;
         if (currentMode === 'images') {
           switch (e.key) {
             case 'ArrowLeft': e.preventDefault(); vscode.postMessage({ type: 'navigatePrev' }); break;

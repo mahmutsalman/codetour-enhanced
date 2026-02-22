@@ -62,7 +62,7 @@ export class StepAudioViewProvider implements vscode.WebviewViewProvider {
         return [
           store.activeTour.step,
           step?.audios?.length ?? 0,
-          step?.audios?.map(a => a.id).join(","),
+          step?.audios?.map(a => `${a.id}:${a.caption ?? ""}`).join(","),
           store.isAudioRecording,
           store.isRecording || store.isEditing
         ];
@@ -230,10 +230,14 @@ export class StepAudioViewProvider implements vscode.WebviewViewProvider {
     const audioListHtml = audios.map((audio, idx) => {
       const duration = formatDuration(audio.duration);
       const format = audio.format.toUpperCase();
+      const captionHtml = audio.caption
+        ? `<div class="audio-caption" title="${escapeHtml(audio.caption)}">${escapeHtml(audio.caption)}</div>`
+        : '';
       return `<div class="audio-item">
         <button class="play-btn" data-action="togglePlay" data-index="${idx}" title="Play/Stop">&#x25B6;</button>
         <div class="audio-info" data-action="openInPlayer" data-index="${idx}">
           <div class="audio-name">${escapeHtml(audio.filename)}</div>
+          ${captionHtml}
           <div class="audio-meta">
             <span class="badge">${duration}</span>
             <span class="badge">${format}</span>
@@ -403,6 +407,13 @@ export class StepAudioViewProvider implements vscode.WebviewViewProvider {
       justify-content: center;
     }
     .audio-item:hover .remove-btn { display: flex; }
+    .audio-caption {
+      font-size: 10px;
+      color: var(--vscode-descriptionForeground);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
   </style>
 </head>
 <body>

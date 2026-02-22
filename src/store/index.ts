@@ -30,6 +30,7 @@ export interface CodeTourStepAudio {
   format: string;                // audio format (webm, mp3, etc.)
   created: number;               // timestamp
   transcript?: string;           // optional transcription
+  caption?: string;              // optional description
 }
 
 export interface CodeTourStep {

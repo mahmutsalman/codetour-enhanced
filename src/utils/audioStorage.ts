@@ -231,6 +231,30 @@ export function updateAudioTranscript(
 }
 
 /**
+ * Updates an audio's caption
+ */
+export function updateAudioCaption(
+  tour: CodeTour,
+  stepIndex: number,
+  audioId: string,
+  caption?: string
+): boolean {
+  const step = tour.steps[stepIndex];
+  if (!step.audios) return false;
+
+  const audio = step.audios.find(a => a.id === audioId);
+  if (!audio) return false;
+
+  if (caption) {
+    audio.caption = caption;
+  } else {
+    delete audio.caption;
+  }
+
+  return true;
+}
+
+/**
  * Gets audio file URI for playback
  */
 export function getAudioUri(audio: CodeTourStepAudio, workspaceUri: Uri): Uri {
@@ -267,7 +291,7 @@ export function getMimeType(format: string): string {
  */
 export async function convertAudiosToDataUrls(audios: CodeTourStepAudio[]): Promise<{
   id: string; filename: string; duration: number; format: string;
-  transcript?: string; dataUrl?: string;
+  transcript?: string; caption?: string; dataUrl?: string;
 }[]> {
   const workspaceUri = workspace.workspaceFolders?.[0]?.uri;
   if (!workspaceUri) return [];
@@ -284,6 +308,7 @@ export async function convertAudiosToDataUrls(audios: CodeTourStepAudio[]): Prom
         duration: audio.duration,
         format: audio.format,
         transcript: audio.transcript,
+        caption: audio.caption,
         dataUrl: `data:${mimeType};base64,${base64}`
       };
     } catch {
@@ -292,7 +317,8 @@ export async function convertAudiosToDataUrls(audios: CodeTourStepAudio[]): Prom
         filename: audio.filename,
         duration: audio.duration,
         format: audio.format,
-        transcript: audio.transcript
+        transcript: audio.transcript,
+        caption: audio.caption
       };
     }
   }));
