@@ -406,6 +406,16 @@
         "title": "Cancel Rich Text Edit",
         "category": "CodeTour Enhanced",
         "icon": "$(close)"
+      },
+      {
+        "command": "codetour.updateImageColor",
+        "title": "Update Image Color",
+        "category": "CodeTour Enhanced"
+      },
+      {
+        "command": "codetour.pasteImageFromWebview",
+        "title": "Paste Image from Webview",
+        "category": "CodeTour Enhanced"
       }
     ],
     "menus": {
@@ -572,6 +582,14 @@
         },
         {
           "command": "codetour.cancelStepRichTextEdit",
+          "when": "false"
+        },
+        {
+          "command": "codetour.updateImageColor",
+          "when": "false"
+        },
+        {
+          "command": "codetour.pasteImageFromWebview",
           "when": "false"
         }
       ],
@@ -863,6 +881,13 @@
           "title": "CodeTour Enhanced",
           "icon": "images/codetour-icon.svg"
         }
+      ],
+      "panel": [
+        {
+          "id": "codetourEnhancedPanel",
+          "title": "CodeTour",
+          "icon": "images/codetour-icon.svg"
+        }
       ]
     },
     "views": {
@@ -875,6 +900,20 @@
           "type": "webview",
           "id": "codetourEnhanced.stepContent",
           "name": "Step Content",
+          "when": "codetour:inTour"
+        },
+        {
+          "type": "webview",
+          "id": "codetourEnhanced.stepImages",
+          "name": "Step Images",
+          "when": "codetour:inTour"
+        }
+      ],
+      "codetourEnhancedPanel": [
+        {
+          "type": "webview",
+          "id": "codetourEnhanced.imageGallery",
+          "name": "Image Gallery",
           "when": "codetour:inTour"
         }
       ]

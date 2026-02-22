@@ -41,3 +41,11 @@ export const IMAGE_DISPLAY = {
   GRID_THUMBNAIL_HEIGHT: 96,
   GRID_GAP: 8
 };
+
+// Color tag presets for image annotations
+export const IMAGE_COLOR_PRESETS: Record<string, string> = {
+  green: '#28a745',
+  blue: '#007acc',
+  purple: '#7b68ee',
+  red: '#ef4444'
+};

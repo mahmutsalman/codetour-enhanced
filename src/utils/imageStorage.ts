@@ -288,6 +288,30 @@ export async function removeImageFromStep(
 }
 
 /**
+ * Updates an image's color tag
+ */
+export function updateImageColor(
+  tour: CodeTour,
+  stepIndex: number,
+  imageId: string,
+  color?: string
+): boolean {
+  const step = tour.steps[stepIndex];
+  if (!step.images) return false;
+
+  const image = step.images.find(img => img.id === imageId);
+  if (!image) return false;
+
+  if (color) {
+    image.color = color;
+  } else {
+    delete image.color;
+  }
+
+  return true;
+}
+
+/**
  * Updates an image's caption
  */
 export function updateImageCaption(

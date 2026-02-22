@@ -16,6 +16,8 @@ import {
 import { discoverTours as _discoverTours } from "./store/provider";
 import { GalleryManager } from "./gallery/galleryManager";
 import { StepContentViewProvider } from "./player/stepContentView";
+import { StepImagesViewProvider } from "./player/stepImagesView";
+import { ImageGalleryPanelProvider } from "./player/imageGalleryPanel";
 
 /**
  * In order to check whether the URI handler was called on activation,
@@ -125,6 +127,34 @@ export async function activate(context: vscode.ExtensionContext) {
       })
     );
     console.log("CodeTour: Step Content provider registered");
+
+    // Register Step Images sidebar provider and Image Gallery bottom panel provider
+    const imageGalleryProvider = new ImageGalleryPanelProvider(context.extensionUri);
+    const stepImagesProvider = new StepImagesViewProvider(context.extensionUri);
+    stepImagesProvider.setGalleryProvider(imageGalleryProvider);
+
+    context.subscriptions.push(
+      vscode.window.registerWebviewViewProvider(
+        StepImagesViewProvider.viewType,
+        stepImagesProvider,
+        { webviewOptions: { retainContextWhenHidden: true } }
+      ),
+      vscode.window.registerWebviewViewProvider(
+        ImageGalleryPanelProvider.viewType,
+        imageGalleryProvider,
+        { webviewOptions: { retainContextWhenHidden: true } }
+      )
+    );
+
+    context.subscriptions.push(
+      vscode.commands.registerCommand("codetour.updateImageColor", () => {
+        // Color updates are handled via webview message passing in the gallery panel
+      }),
+      vscode.commands.registerCommand("codetour.pasteImageFromWebview", () => {
+        // Paste is handled via webview message passing in both panels
+      })
+    );
+    console.log("CodeTour: Step Images and Image Gallery providers registered");
 
     // Initialize tour sorting and filtering preferences
     const initializePreferences = () => {

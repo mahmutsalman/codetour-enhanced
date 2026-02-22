@@ -130,6 +130,35 @@
               "type": "string"
             }
           },
+          "images": {
+            "type": "array",
+            "description": "Image attachments for this step.",
+            "items": {
+              "type": "object",
+              "required": ["id", "filename", "path", "size", "dimensions", "created"],
+              "properties": {
+                "id": { "type": "string" },
+                "filename": { "type": "string" },
+                "path": { "type": "string" },
+                "thumbnail": { "type": "string" },
+                "caption": { "type": "string" },
+                "color": {
+                  "type": "string",
+                  "enum": ["green", "blue", "purple", "red"],
+                  "description": "Color tag for visual categorization."
+                },
+                "size": { "type": "number" },
+                "dimensions": {
+                  "type": "object",
+                  "properties": {
+                    "width": { "type": "number" },
+                    "height": { "type": "number" }
+                  }
+                },
+                "created": { "type": "number" }
+              }
+            }
+          },
           "richDescription": {
             "type": "object",
             "description": "Rich text content for this step, stored as Quill Delta JSON with pre-rendered HTML.",

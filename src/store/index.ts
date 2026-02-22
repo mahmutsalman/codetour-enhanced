@@ -15,6 +15,7 @@ export interface CodeTourStepImage {
   path: string;                  // relative path from workspace
   thumbnail?: string;            // thumbnail path
   caption?: string;              // optional description
+  color?: string;                // color tag (green/blue/purple/red)
   size: number;                  // file size in bytes
   dimensions: {width: number; height: number};
   created: number;              // timestamp
