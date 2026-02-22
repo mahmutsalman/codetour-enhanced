@@ -2,7 +2,7 @@ import { reaction } from "mobx";
 import * as vscode from "vscode";
 import { store, CodeTourStepAudio } from "../store";
 import { saveTour } from "../recorder/commands";
-import { removeAudioFromStep, convertAudiosToDataUrls } from "../utils/audioStorage";
+import { removeAudioFromStep } from "../utils/audioStorage";
 import { ImageGalleryPanelProvider } from "./imageGalleryPanel";
 
 export class StepAudioViewProvider implements vscode.WebviewViewProvider {
@@ -11,11 +11,27 @@ export class StepAudioViewProvider implements vscode.WebviewViewProvider {
   private _view?: vscode.WebviewView;
   private _mediaProvider?: ImageGalleryPanelProvider;
   private _disposables: vscode.Disposable[] = [];
+  private _onTogglePlay?: (index: number) => void;
+  private _playbackState: { playing: boolean; index: number | null } = { playing: false, index: null };
 
   constructor(private readonly _extensionUri: vscode.Uri) {}
 
   public setMediaProvider(provider: ImageGalleryPanelProvider) {
     this._mediaProvider = provider;
+  }
+
+  public setOnTogglePlay(callback: (index: number) => void) {
+    this._onTogglePlay = callback;
+  }
+
+  public updatePlaybackState(playing: boolean, index: number | null) {
+    this._playbackState = { playing, index };
+    this._view?.webview.postMessage({ type: 'playbackStateChanged', playing, index });
+  }
+
+  public stopPlayback() {
+    this._playbackState = { playing: false, index: null };
+    this._view?.webview.postMessage({ type: 'stopPlayback' });
   }
 
   public resolveWebviewView(
@@ -105,15 +121,19 @@ export class StepAudioViewProvider implements vscode.WebviewViewProvider {
         vscode.commands.executeCommand("codetour.addAudioFromFile");
         break;
       }
+
+      case "togglePlay":
+        this._onTogglePlay?.(message.index ?? 0);
+        break;
     }
   }
 
-  private async _updateContent() {
+  private _updateContent() {
     if (!this._view) return;
-    this._view.webview.html = await this._getHtml(this._view.webview);
+    this._view.webview.html = this._getHtml(this._view.webview);
   }
 
-  private async _getHtml(webview: vscode.Webview): Promise<string> {
+  private _getHtml(webview: vscode.Webview): string {
     const nonce = getNonce();
     const audios = this._getAudios();
     const isEditMode = store.isRecording || store.isEditing;
@@ -206,9 +226,6 @@ export class StepAudioViewProvider implements vscode.WebviewViewProvider {
 </html>`;
     }
 
-    // Load audio data URLs for inline playback
-    const audioDataList = await convertAudiosToDataUrls(audios);
-
     // Has audios or is recording
     const audioListHtml = audios.map((audio, idx) => {
       const duration = formatDuration(audio.duration);
@@ -237,7 +254,8 @@ export class StepAudioViewProvider implements vscode.WebviewViewProvider {
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'nonce-${nonce}'; script-src 'nonce-${nonce}'; media-src data: blob:;">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'nonce-${nonce}'; script-src 'nonce-${nonce}';">
+
   <style nonce="${nonce}">
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -407,70 +425,28 @@ export class StepAudioViewProvider implements vscode.WebviewViewProvider {
   <script nonce="${nonce}">
     (function() {
       var vscode = acquireVsCodeApi();
-      var audios = ${JSON.stringify(audioDataList)};
-      var audioEl = new Audio();
-      var currentlyPlaying = null;
-      var isPaused = false;
+      var playbackState = ${JSON.stringify(this._playbackState)};
 
-      function togglePlay(index) {
-        // Same track: toggle pause/resume
-        if (currentlyPlaying === index) {
-          if (isPaused) {
-            audioEl.play().then(function() {
-              isPaused = false;
-              updateButton(index, true);
-            });
-          } else {
-            audioEl.pause();
-            isPaused = true;
-            updateButton(index, false);
-          }
-          return;
-        }
-        // Different track: stop current, start new
-        stopCurrent();
-        var audio = audios[index];
-        if (!audio || !audio.dataUrl) return;
-        audioEl.src = audio.dataUrl;
-        audioEl.play().then(function() {
-          currentlyPlaying = index;
-          isPaused = false;
-          updateButton(index, true);
-        }).catch(function() {
-          // playback failed silently
-        });
-      }
-
-      function stopCurrent() {
-        if (currentlyPlaying !== null) {
-          updateButton(currentlyPlaying, false);
-          audioEl.pause();
-          audioEl.currentTime = 0;
-          currentlyPlaying = null;
-          isPaused = false;
-        }
-      }
-
-      function updateButton(index, playing) {
+      function applyPlaybackState(state) {
+        playbackState = state;
         var btns = document.querySelectorAll('.play-btn[data-action="togglePlay"]');
-        if (btns[index]) {
-          if (playing) {
-            btns[index].innerHTML = '\\u23F8';
-            btns[index].classList.add('playing');
-          } else {
-            btns[index].innerHTML = '\\u25B6';
-            btns[index].classList.remove('playing');
-          }
+        for (var i = 0; i < btns.length; i++) {
+          var isPlaying = state.playing && state.index === i;
+          btns[i].innerHTML = isPlaying ? '\\u23F8' : '\\u25B6';
+          btns[i].classList.toggle('playing', isPlaying);
         }
       }
 
-      audioEl.addEventListener('ended', function() {
-        if (currentlyPlaying !== null) {
-          updateButton(currentlyPlaying, false);
-          currentlyPlaying = null;
-          isPaused = false;
+      window.addEventListener('message', function(e) {
+        var msg = e.data;
+        if (msg.type === 'playbackStateChanged') {
+          applyPlaybackState({ playing: msg.playing, index: msg.index });
+        } else if (msg.type === 'stopPlayback') {
+          applyPlaybackState({ playing: false, index: null });
         }
       });
+
+      applyPlaybackState(playbackState);
 
       document.addEventListener('click', function(e) {
         var el = e.target;
@@ -481,14 +457,13 @@ export class StepAudioViewProvider implements vscode.WebviewViewProvider {
             switch (action) {
               case 'togglePlay':
                 e.stopPropagation();
-                togglePlay(parseInt(el.getAttribute('data-index')));
+                vscode.postMessage({ type: 'togglePlay', index: parseInt(el.getAttribute('data-index')) });
                 return;
               case 'openInPlayer':
                 vscode.postMessage({ type: 'openInPlayer', index: parseInt(el.getAttribute('data-index')) });
                 break;
               case 'remove':
                 e.stopPropagation();
-                stopCurrent();
                 vscode.postMessage({ type: 'remove', audioId: el.getAttribute('data-audio-id') });
                 break;
               case 'record':

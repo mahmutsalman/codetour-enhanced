@@ -16,8 +16,40 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
   private _audioIndex = 0;
   private _initialized = false;
   private _disposables: vscode.Disposable[] = [];
+  private _pendingAutoPlay = false;
+  private _isPlaying = false;
+  private _playingIndex: number | null = null;
+  private _onPlaybackStarted?: (index: number) => void;
+  private _onPlaybackStopped?: () => void;
 
   constructor(private readonly _extensionUri: vscode.Uri) {}
+
+  public setOnPlaybackStarted(callback: (index: number) => void) {
+    this._onPlaybackStarted = callback;
+  }
+
+  public setOnPlaybackStopped(callback: () => void) {
+    this._onPlaybackStopped = callback;
+  }
+
+  public stopAudioPlayback() {
+    this._view?.webview.postMessage({ type: 'stopPlayback' });
+  }
+
+  public async playAudioAtIndex(index: number) {
+    this._mode = 'audio';
+    this._audioIndex = index;
+    this._pendingAutoPlay = true;
+    await this._updateContent();
+  }
+
+  public toggleAudioPlayback(index: number) {
+    if (this._isPlaying && this._playingIndex === index) {
+      this._view?.webview.postMessage({ type: 'togglePlayback' });
+    } else {
+      this.playAudioAtIndex(index);
+    }
+  }
 
   public resolveWebviewView(
     webviewView: vscode.WebviewView,
@@ -175,6 +207,18 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
         await this._handlePaste(message.dataUrl);
         break;
       }
+
+      case "audioPlaybackStarted":
+        this._isPlaying = true;
+        this._playingIndex = message.index ?? this._audioIndex;
+        this._onPlaybackStarted?.(this._playingIndex!);
+        break;
+
+      case "audioPlaybackStopped":
+        this._isPlaying = false;
+        this._playingIndex = null;
+        this._onPlaybackStopped?.();
+        break;
     }
   }
 
@@ -269,6 +313,9 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
       this._audioIndex = audios.length - 1;
     }
 
+    const autoPlay = this._pendingAutoPlay;
+    this._pendingAutoPlay = false;
+
     this._view.webview.postMessage({
       type: 'fullUpdate',
       mode: this._mode,
@@ -276,7 +323,8 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
       imageIndex: this._currentIndex,
       audios,
       audioIndex: this._audioIndex,
-      colorPresets: Object.keys(IMAGE_COLOR_PRESETS)
+      colorPresets: Object.keys(IMAGE_COLOR_PRESETS),
+      autoPlay
     });
   }
 
@@ -780,6 +828,7 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
       var wsInitializing = false;
       var wsReady = false;
       var currentAudioSrc = null;
+      var autoPlayOnReady = false;
 
       // ── DOM refs ──
       var el = {
@@ -831,6 +880,13 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
             setMode(msg.mode);
             updateImages();
             updateAudio();
+            if (msg.autoPlay && audios.length > 0) {
+              if (wavesurfer && wsReady) {
+                safePlay();
+              } else {
+                autoPlayOnReady = true;
+              }
+            }
             break;
           case 'setImageIndex':
             imageIndex = msg.index;
@@ -839,6 +895,14 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
           case 'setAudioIndex':
             audioIndex = msg.index;
             showAudioByIndex();
+            break;
+          case 'stopPlayback':
+            if (wavesurfer && wavesurfer.isPlaying()) {
+              wavesurfer.pause();
+            }
+            break;
+          case 'togglePlayback':
+            if (wavesurfer) wavesurfer.playPause();
             break;
           case 'noTour':
             el.imageMode.classList.add('hidden');
@@ -1047,6 +1111,35 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
       }
 
       // ── WaveSurfer ──
+      // Autoplay warm-up: first user gesture in this webview unlocks
+      // media playback for all future programmatic play() calls.
+      var audioUnlocked = false;
+      var pendingPlay = false;
+      var SILENCE = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=';
+
+      document.addEventListener('click', function() {
+        if (!audioUnlocked) {
+          audioUnlocked = true;
+          var s = new Audio(SILENCE);
+          s.volume = 0;
+          s.play().then(function() { s.pause(); }).catch(function(){});
+        }
+        if (pendingPlay && wavesurfer && wsReady) {
+          pendingPlay = false;
+          wavesurfer.play();
+        }
+      });
+
+      function safePlay() {
+        if (!wavesurfer) return;
+        try {
+          var result = wavesurfer.play();
+          if (result && typeof result.catch === 'function') {
+            result.catch(function() { pendingPlay = true; });
+          }
+        } catch(e) { pendingPlay = true; }
+      }
+
       // pendingAudioSrc: set when loadAudioInWaveSurfer is called before
       // WaveSurfer is created. Consumed once initWaveSurfer completes.
       var pendingAudioSrc = null;
@@ -1063,14 +1156,13 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
           wavesurfer = WaveSurfer.create({
             container: '#waveform',
             waveColor: 'rgba(54, 162, 235, 0.8)',
-            progressColor: 'rgba(34, 134, 58, 1)',
+            progressColor: 'rgba(255, 165, 0, 0.85)',
             cursorColor: 'rgba(255, 193, 7, 1)',
             barWidth: 2,
             barRadius: 3,
             responsive: true,
             height: 80,
             normalize: true,
-            backend: 'WebAudio',
             interact: true,
             hideScrollbar: false
           });
@@ -1080,6 +1172,10 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
             el.waveformLoading.style.display = 'none';
             el.playPauseBtn.disabled = false;
             updateWsTime();
+            if (autoPlayOnReady) {
+              autoPlayOnReady = false;
+              safePlay();
+            }
           });
           wavesurfer.on('loading', function(p) {
             el.waveformLoading.textContent = 'Loading waveform... ' + p + '%';
@@ -1088,14 +1184,17 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
           wavesurfer.on('play', function() {
             el.playPauseBtn.textContent = '\\u23F8';
             el.playingIndicator.style.display = 'inline-flex';
+            vscode.postMessage({ type: 'audioPlaybackStarted', index: audioIndex });
           });
           wavesurfer.on('pause', function() {
             el.playPauseBtn.textContent = '\\u25B6';
             el.playingIndicator.style.display = 'none';
+            vscode.postMessage({ type: 'audioPlaybackStopped' });
           });
           wavesurfer.on('finish', function() {
             el.playPauseBtn.textContent = '\\u25B6';
             el.playingIndicator.style.display = 'none';
+            vscode.postMessage({ type: 'audioPlaybackStopped' });
           });
           wavesurfer.on('timeupdate', updateWsTime);
           wavesurfer.on('error', function(err) {

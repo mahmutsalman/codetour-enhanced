@@ -151,6 +151,20 @@ export async function activate(context: vscode.ExtensionContext) {
     const stepAudioProvider = new StepAudioViewProvider(context.extensionUri);
     stepAudioProvider.setMediaProvider(imageGalleryProvider);
 
+    // Cross-wire audio playback: sidebar is remote control, bottom panel is the engine
+    // Sidebar toggle → bottom panel play/pause (focus panel to ensure user can interact)
+    stepAudioProvider.setOnTogglePlay((index) => {
+      imageGalleryProvider.toggleAudioPlayback(index);
+      vscode.commands.executeCommand("codetourEnhanced.imageGallery.focus");
+    });
+    // Bottom panel state → sidebar button state
+    imageGalleryProvider.setOnPlaybackStarted((index) => {
+      stepAudioProvider.updatePlaybackState(true, index);
+    });
+    imageGalleryProvider.setOnPlaybackStopped(() => {
+      stepAudioProvider.updatePlaybackState(false, null);
+    });
+
     context.subscriptions.push(
       vscode.window.registerWebviewViewProvider(
         StepAudioViewProvider.viewType,
