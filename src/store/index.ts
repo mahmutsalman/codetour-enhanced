@@ -62,6 +62,12 @@ export interface CodeTourStep {
   
   // NEW: Audio attachments for this step
   audios?: CodeTourStepAudio[];
+
+  // Rich text content (Quill.js Delta + pre-rendered HTML)
+  richDescription?: {
+    delta: any;    // Quill Delta JSON (source of truth)
+    html: string;  // Pre-rendered HTML for quick display
+  };
 }
 
 export interface CodeTour {

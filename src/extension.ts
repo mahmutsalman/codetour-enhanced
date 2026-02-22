@@ -15,6 +15,7 @@ import {
 } from "./store/actions";
 import { discoverTours as _discoverTours } from "./store/provider";
 import { GalleryManager } from "./gallery/galleryManager";
+import { StepContentViewProvider } from "./player/stepContentView";
 
 /**
  * In order to check whether the URI handler was called on activation,
@@ -101,6 +102,29 @@ export async function activate(context: vscode.ExtensionContext) {
       console.error("CodeTour: Gallery manager initialization failed, but continuing:", galleryError);
       // Don't let gallery errors break the extension
     }
+
+    // Register Step Content webview provider (Quill.js rich text editor)
+    const stepContentProvider = new StepContentViewProvider(context.extensionUri);
+    context.subscriptions.push(
+      vscode.window.registerWebviewViewProvider(
+        StepContentViewProvider.viewType,
+        stepContentProvider,
+        { webviewOptions: { retainContextWhenHidden: true } }
+      )
+    );
+
+    context.subscriptions.push(
+      vscode.commands.registerCommand("codetour.editStepRichText", () => {
+        stepContentProvider.enterEditMode();
+      }),
+      vscode.commands.registerCommand("codetour.saveStepRichText", () => {
+        // Save is handled via webview message passing
+      }),
+      vscode.commands.registerCommand("codetour.cancelStepRichTextEdit", () => {
+        stepContentProvider.cancelEdit();
+      })
+    );
+    console.log("CodeTour: Step Content provider registered");
 
     // Initialize tour sorting and filtering preferences
     const initializePreferences = () => {

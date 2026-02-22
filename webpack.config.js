@@ -45,6 +45,14 @@ const config = {
         {
           from: path.resolve(__dirname, 'src/audio/assets/player.css'),
           to: 'assets/player.css'
+        },
+        {
+          from: path.resolve(__dirname, 'node_modules/quill/dist/quill.snow.css'),
+          to: 'assets/quill.snow.css'
+        },
+        {
+          from: path.resolve(__dirname, 'node_modules/quill/dist/quill.js'),
+          to: 'assets/quill.js'
         }
       ]
     })

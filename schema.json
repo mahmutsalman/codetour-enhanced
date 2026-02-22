@@ -129,6 +129,19 @@
             "items": {
               "type": "string"
             }
+          },
+          "richDescription": {
+            "type": "object",
+            "description": "Rich text content for this step, stored as Quill Delta JSON with pre-rendered HTML.",
+            "properties": {
+              "delta": {
+                "description": "Quill Delta JSON representing the rich text content (source of truth)."
+              },
+              "html": {
+                "type": "string",
+                "description": "Pre-rendered HTML for quick display without loading Quill."
+              }
+            }
           }
         }
       }

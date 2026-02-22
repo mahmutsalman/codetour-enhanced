@@ -388,6 +388,24 @@
         "title": "View Full Content",
         "category": "CodeTour Enhanced",
         "icon": "$(book)"
+      },
+      {
+        "command": "codetour.editStepRichText",
+        "title": "Edit Rich Text",
+        "category": "CodeTour Enhanced",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "codetour.saveStepRichText",
+        "title": "Save Rich Text",
+        "category": "CodeTour Enhanced",
+        "icon": "$(save)"
+      },
+      {
+        "command": "codetour.cancelStepRichTextEdit",
+        "title": "Cancel Rich Text Edit",
+        "category": "CodeTour Enhanced",
+        "icon": "$(close)"
       }
     ],
     "menus": {
@@ -543,6 +561,18 @@
         {
           "command": "codetour.viewFullContent",
           "when": "codetour:inTour"
+        },
+        {
+          "command": "codetour.editStepRichText",
+          "when": "codetour:inTour && codetour:canEditTour"
+        },
+        {
+          "command": "codetour.saveStepRichText",
+          "when": "false"
+        },
+        {
+          "command": "codetour.cancelStepRichTextEdit",
+          "when": "false"
         }
       ],
       "comments/commentThread/title": [
@@ -840,6 +870,12 @@
         {
           "id": "codetourEnhanced.tours",
           "name": "Tours"
+        },
+        {
+          "type": "webview",
+          "id": "codetourEnhanced.stepContent",
+          "name": "Step Content",
+          "when": "codetour:inTour"
         }
       ]
     },
@@ -915,6 +951,7 @@
     "mobx": "^5.14.2",
     "os-browserify": "0.3.0",
     "path-browserify": "1.0.1",
+    "quill": "^2.0.3",
     "throttle-debounce": "^3.0.1",
     "util": "^0.12.5",
     "vsls": "^1.0.2532",

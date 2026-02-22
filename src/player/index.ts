@@ -361,15 +361,23 @@ async function renderCurrentStep() {
 
   store.activeTour!.thread = controller!.createCommentThread(uri, range, []);
 
+  const hasRichDescription = !!step.richDescription;
   const mode =
     store.isRecording && store.isEditing
       ? CommentMode.Editing
       : CommentMode.Preview;
-  const baseDescription = stripGeneratedMediaSections(step.description);
 
-  // Layer 1: Wrap long code blocks in collapsible <details> tags
-  // This helps mitigate VS Code's CommentThread max-height limitation
-  let content = wrapLongCodeBlocks(baseDescription);
+  let content: string;
+  if (hasRichDescription && mode === CommentMode.Preview) {
+    // Minimal CommentThread: step title + pointer to sidebar panel
+    const stepTitle = step.title ? `**${step.title}**\n\n` : "";
+    content = `${stepTitle}*Rich content available in the **Step Content** panel below.*`;
+  } else {
+    const baseDescription = stripGeneratedMediaSections(step.description);
+    // Layer 1: Wrap long code blocks in collapsible <details> tags
+    // This helps mitigate VS Code's CommentThread max-height limitation
+    content = wrapLongCodeBlocks(baseDescription);
+  }
 
   let hasPreviousStep = currentStep > 0;
   const hasNextStep = currentStep < currentTour.steps.length - 1;
@@ -569,7 +577,8 @@ export function registerPlayerModule(context: ExtensionContext) {
               step.line,
               step.directory,
               step.view,
-              step.images
+              step.images,
+              step.richDescription
             ])
           ]
         : null
