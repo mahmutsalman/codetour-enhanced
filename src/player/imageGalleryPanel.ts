@@ -550,6 +550,7 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
       min-height: 0;
     }
     .waveform-box {
+      position: relative;
       border: 1px solid var(--vscode-input-border);
       border-radius: 4px;
       background: var(--vscode-input-background);
@@ -559,6 +560,23 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
       max-height: 100px;
     }
     #waveform { height: 80px; overflow: hidden; }
+    #waveformProgress {
+      position: absolute;
+      top: 0; left: 0; bottom: 0;
+      width: 0;
+      background: rgba(74, 222, 128, 0.13);
+      pointer-events: none;
+      z-index: 1;
+    }
+    #waveformCursor {
+      position: absolute;
+      top: 0; bottom: 0;
+      left: 0;
+      width: 2px;
+      background: #ffc107;
+      pointer-events: none;
+      z-index: 2;
+    }
     .waveform-loading {
       display: flex;
       align-items: center;
@@ -770,6 +788,8 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
         <div class="waveform-box">
           <div class="waveform-loading" id="waveformLoading">Loading waveform...</div>
           <div id="waveform"></div>
+          <div id="waveformProgress"></div>
+          <div id="waveformCursor"></div>
         </div>
         <div class="playback-controls">
           <button class="play-btn" id="playPauseBtn" disabled>&#x25B6;</button>
@@ -812,7 +832,7 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
 
   <div id="noTourOverlay" class="empty" style="display:none"><p>No tour is active.</p></div>
 
-  <script nonce="${nonce}" src="https://unpkg.com/wavesurfer.js@7.10.1/dist/wavesurfer.min.js"></script>
+  <script nonce="${nonce}" src="https://unpkg.com/wavesurfer.js@7.4.0/dist/wavesurfer.min.js"></script>
   <script nonce="${nonce}">
     (function() {
       var vscode = acquireVsCodeApi();
@@ -861,7 +881,9 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
         playingIndicator: document.getElementById('playingIndicator'),
         transcriptBox: document.getElementById('transcriptBox'),
         transcriptText: document.getElementById('transcriptText'),
-        errorMessage: document.getElementById('errorMessage')
+        errorMessage: document.getElementById('errorMessage'),
+        waveformProgress: document.getElementById('waveformProgress'),
+        waveformCursor: document.getElementById('waveformCursor')
       };
 
       // ── Message handler ──
@@ -1155,9 +1177,10 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
           document.getElementById('waveform').innerHTML = '';
           wavesurfer = WaveSurfer.create({
             container: '#waveform',
-            waveColor: 'rgba(54, 162, 235, 0.8)',
-            progressColor: 'rgba(255, 165, 0, 0.85)',
-            cursorColor: 'rgba(255, 193, 7, 1)',
+            waveColor: '#4a90d9',
+            progressColor: '#4a90d9',
+            cursorColor: 'transparent',
+            cursorWidth: 0,
             barWidth: 2,
             barRadius: 3,
             responsive: true,
@@ -1248,9 +1271,12 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
 
       function updateWsTime() {
         if (!wavesurfer) return;
-        var cur = fmtTime(wavesurfer.getCurrentTime() || 0);
-        var dur = fmtTime(wavesurfer.getDuration() || 0);
-        el.timeDisplay.textContent = cur + ' / ' + dur;
+        var curSec = wavesurfer.getCurrentTime() || 0;
+        var durSec = wavesurfer.getDuration() || 0;
+        el.timeDisplay.textContent = fmtTime(curSec) + ' / ' + fmtTime(durSec);
+        var pct = durSec > 0 ? (curSec / durSec * 100) : 0;
+        el.waveformProgress.style.width = pct + '%';
+        el.waveformCursor.style.left = pct + '%';
       }
 
       function fmtTime(s) {
