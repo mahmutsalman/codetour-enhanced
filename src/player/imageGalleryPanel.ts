@@ -177,7 +177,7 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
     );
 
     const colorClasses = Object.entries(IMAGE_COLOR_PRESETS).map(([name, hex]) =>
-      `.color-bg-${name} { background-color: ${hex}; }\n    .thumb-border-${name} { border-color: ${hex}; }`
+      `.color-bg-${name} { background-color: ${hex}; }\n    .thumb.thumb-border-${name} { border-color: ${hex}; }\n    .main-img.img-border-${name} { border: 3px solid ${hex}; }`
     ).join("\n    ");
 
     const thumbsHtml = images.map((img, idx) => {
@@ -326,7 +326,7 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
   </div>
 
   <div class="image-area" id="imageArea">
-    <img class="main-img" id="mainImg" src="${mainImageUri}" alt="${escapeHtml(currentImage.filename)}" />
+    <img class="main-img ${currentImage.color ? `img-border-${currentImage.color}` : ''}" id="mainImg" src="${mainImageUri}" alt="${escapeHtml(currentImage.filename)}" />
   </div>
 
   <div class="caption-bar">

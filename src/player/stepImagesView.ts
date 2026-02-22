@@ -48,7 +48,7 @@ export class StepImagesViewProvider implements vscode.WebviewViewProvider {
         return [
           store.activeTour.step,
           step?.images?.length ?? 0,
-          step?.images?.map(i => `${i.id}:${i.color ?? ""}`).join(",")
+          step?.images?.map(i => `${i.id}:${i.color ?? ""}:${i.caption ?? ""}`).join(",")
         ];
       },
       () => this._updateContent()
@@ -194,7 +194,7 @@ export class StepImagesViewProvider implements vscode.WebviewViewProvider {
     const totalSteps = store.activeTour.tour.steps.length;
 
     const colorClasses = Object.entries(IMAGE_COLOR_PRESETS).map(([name, hex]) =>
-      `.thumb-border-${name} { border-color: ${hex}; }`
+      `.thumb-wrapper.thumb-border-${name} { border-color: ${hex}; }`
     ).join("\n    ");
 
     if (images.length === 0) {
