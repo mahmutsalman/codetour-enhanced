@@ -5,6 +5,7 @@ import * as path from "path";
 import { Uri, workspace } from "vscode";
 import { CodeTour, CodeTourStepAudio } from "../store";
 import { getActiveWorkspacePath } from "../utils";
+import { Buffer } from "buffer";
 
 const AUDIOS_FOLDER = ".tours/audio";
 
@@ -243,4 +244,56 @@ export function formatDuration(seconds: number): string {
   const minutes = Math.floor(seconds / 60);
   const remainingSeconds = Math.floor(seconds % 60);
   return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+}
+
+/**
+ * Gets the MIME type for an audio format
+ */
+export function getMimeType(format: string): string {
+  switch (format.toLowerCase()) {
+    case 'wav': return 'audio/wav';
+    case 'mp3': return 'audio/mpeg';
+    case 'ogg': return 'audio/ogg';
+    case 'webm': return 'audio/webm';
+    case 'm4a': return 'audio/mp4';
+    case 'aac': return 'audio/aac';
+    case 'flac': return 'audio/flac';
+    default: return 'audio/wav';
+  }
+}
+
+/**
+ * Converts audio metadata to data URLs for webview playback
+ */
+export async function convertAudiosToDataUrls(audios: CodeTourStepAudio[]): Promise<{
+  id: string; filename: string; duration: number; format: string;
+  transcript?: string; dataUrl?: string;
+}[]> {
+  const workspaceUri = workspace.workspaceFolders?.[0]?.uri;
+  if (!workspaceUri) return [];
+
+  return Promise.all(audios.map(async (audio) => {
+    try {
+      const audioUri = getAudioUri(audio, workspaceUri);
+      const audioData = await workspace.fs.readFile(audioUri);
+      const base64 = Buffer.from(audioData).toString('base64');
+      const mimeType = getMimeType(audio.format);
+      return {
+        id: audio.id,
+        filename: audio.filename,
+        duration: audio.duration,
+        format: audio.format,
+        transcript: audio.transcript,
+        dataUrl: `data:${mimeType};base64,${base64}`
+      };
+    } catch {
+      return {
+        id: audio.id,
+        filename: audio.filename,
+        duration: audio.duration,
+        format: audio.format,
+        transcript: audio.transcript
+      };
+    }
+  }));
 }

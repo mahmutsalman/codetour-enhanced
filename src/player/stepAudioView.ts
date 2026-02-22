@@ -2,7 +2,7 @@ import { reaction } from "mobx";
 import * as vscode from "vscode";
 import { store, CodeTourStepAudio } from "../store";
 import { saveTour } from "../recorder/commands";
-import { removeAudioFromStep } from "../utils/audioStorage";
+import { removeAudioFromStep, convertAudiosToDataUrls } from "../utils/audioStorage";
 import { ImageGalleryPanelProvider } from "./imageGalleryPanel";
 
 export class StepAudioViewProvider implements vscode.WebviewViewProvider {
@@ -108,12 +108,12 @@ export class StepAudioViewProvider implements vscode.WebviewViewProvider {
     }
   }
 
-  private _updateContent() {
+  private async _updateContent() {
     if (!this._view) return;
-    this._view.webview.html = this._getHtml(this._view.webview);
+    this._view.webview.html = await this._getHtml(this._view.webview);
   }
 
-  private _getHtml(webview: vscode.Webview): string {
+  private async _getHtml(webview: vscode.Webview): Promise<string> {
     const nonce = getNonce();
     const audios = this._getAudios();
     const isEditMode = store.isRecording || store.isEditing;
@@ -206,13 +206,16 @@ export class StepAudioViewProvider implements vscode.WebviewViewProvider {
 </html>`;
     }
 
+    // Load audio data URLs for inline playback
+    const audioDataList = await convertAudiosToDataUrls(audios);
+
     // Has audios or is recording
     const audioListHtml = audios.map((audio, idx) => {
       const duration = formatDuration(audio.duration);
       const format = audio.format.toUpperCase();
-      return `<div class="audio-item" data-action="openInPlayer" data-index="${idx}">
-        <div class="audio-icon">&#x266B;</div>
-        <div class="audio-info">
+      return `<div class="audio-item">
+        <button class="play-btn" data-action="togglePlay" data-index="${idx}" title="Play/Stop">&#x25B6;</button>
+        <div class="audio-info" data-action="openInPlayer" data-index="${idx}">
           <div class="audio-name">${escapeHtml(audio.filename)}</div>
           <div class="audio-meta">
             <span class="badge">${duration}</span>
@@ -234,7 +237,7 @@ export class StepAudioViewProvider implements vscode.WebviewViewProvider {
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'nonce-${nonce}'; script-src 'nonce-${nonce}';">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'nonce-${nonce}'; script-src 'nonce-${nonce}'; media-src data: blob:;">
   <style nonce="${nonce}">
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -314,20 +317,38 @@ export class StepAudioViewProvider implements vscode.WebviewViewProvider {
       padding: 6px 8px;
       border: 1px solid var(--vscode-panel-border);
       border-radius: 4px;
-      cursor: pointer;
       transition: background 0.15s;
       position: relative;
     }
     .audio-item:hover {
       background: var(--vscode-list-hoverBackground);
     }
-    .audio-icon {
-      font-size: 14px;
+    .play-btn {
+      width: 24px; height: 24px;
+      border-radius: 50%;
+      border: 1px solid var(--vscode-panel-border);
+      background: var(--vscode-button-secondaryBackground);
+      color: var(--vscode-button-secondaryForeground);
+      font-size: 10px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
       flex-shrink: 0;
+      transition: all 0.15s;
+    }
+    .play-btn:hover {
+      background: var(--vscode-button-secondaryHoverBackground);
+    }
+    .play-btn.playing {
+      background: var(--vscode-button-background);
+      border-color: var(--vscode-button-background);
+      color: var(--vscode-button-foreground);
     }
     .audio-info {
       flex: 1;
       min-width: 0;
+      cursor: pointer;
     }
     .audio-name {
       font-size: 11px;
@@ -386,6 +407,71 @@ export class StepAudioViewProvider implements vscode.WebviewViewProvider {
   <script nonce="${nonce}">
     (function() {
       var vscode = acquireVsCodeApi();
+      var audios = ${JSON.stringify(audioDataList)};
+      var audioEl = new Audio();
+      var currentlyPlaying = null;
+      var isPaused = false;
+
+      function togglePlay(index) {
+        // Same track: toggle pause/resume
+        if (currentlyPlaying === index) {
+          if (isPaused) {
+            audioEl.play().then(function() {
+              isPaused = false;
+              updateButton(index, true);
+            });
+          } else {
+            audioEl.pause();
+            isPaused = true;
+            updateButton(index, false);
+          }
+          return;
+        }
+        // Different track: stop current, start new
+        stopCurrent();
+        var audio = audios[index];
+        if (!audio || !audio.dataUrl) return;
+        audioEl.src = audio.dataUrl;
+        audioEl.play().then(function() {
+          currentlyPlaying = index;
+          isPaused = false;
+          updateButton(index, true);
+        }).catch(function() {
+          // playback failed silently
+        });
+      }
+
+      function stopCurrent() {
+        if (currentlyPlaying !== null) {
+          updateButton(currentlyPlaying, false);
+          audioEl.pause();
+          audioEl.currentTime = 0;
+          currentlyPlaying = null;
+          isPaused = false;
+        }
+      }
+
+      function updateButton(index, playing) {
+        var btns = document.querySelectorAll('.play-btn[data-action="togglePlay"]');
+        if (btns[index]) {
+          if (playing) {
+            btns[index].innerHTML = '\\u23F8';
+            btns[index].classList.add('playing');
+          } else {
+            btns[index].innerHTML = '\\u25B6';
+            btns[index].classList.remove('playing');
+          }
+        }
+      }
+
+      audioEl.addEventListener('ended', function() {
+        if (currentlyPlaying !== null) {
+          updateButton(currentlyPlaying, false);
+          currentlyPlaying = null;
+          isPaused = false;
+        }
+      });
+
       document.addEventListener('click', function(e) {
         var el = e.target;
         for (var i = 0; i < 4 && el && el !== document; i++) {
@@ -393,11 +479,16 @@ export class StepAudioViewProvider implements vscode.WebviewViewProvider {
           if (action) {
             if (el.disabled) return;
             switch (action) {
+              case 'togglePlay':
+                e.stopPropagation();
+                togglePlay(parseInt(el.getAttribute('data-index')));
+                return;
               case 'openInPlayer':
                 vscode.postMessage({ type: 'openInPlayer', index: parseInt(el.getAttribute('data-index')) });
                 break;
               case 'remove':
                 e.stopPropagation();
+                stopCurrent();
                 vscode.postMessage({ type: 'remove', audioId: el.getAttribute('data-audio-id') });
                 break;
               case 'record':
