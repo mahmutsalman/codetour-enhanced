@@ -354,15 +354,9 @@ export class StepImagesViewProvider implements vscode.WebviewViewProvider {
     .add-btn:hover { background: var(--vscode-button-secondaryHoverBackground); }
     .thumb-strip {
       display: flex;
+      flex-wrap: wrap;
       gap: 8px;
-      overflow-x: auto;
       padding: 4px 0;
-      scroll-behavior: smooth;
-    }
-    .thumb-strip::-webkit-scrollbar { height: 4px; }
-    .thumb-strip::-webkit-scrollbar-thumb {
-      background: var(--vscode-scrollbarSlider-background);
-      border-radius: 2px;
     }
     .thumb-card {
       flex-shrink: 0;

@@ -9,7 +9,7 @@ import { Jimp } from "jimp";
 
 const IMAGES_FOLDER = ".tours/images";
 const THUMBNAIL_PREFIX = "thumb-";
-const THUMBNAIL_SIZE = 120; // 120px width for grid thumbnail display
+const THUMBNAIL_SIZE = 240; // 240px width for crisp display at 72px CSS on 2x+ HiDPI screens
 
 /**
  * Generates the image storage path for a specific tour and step
