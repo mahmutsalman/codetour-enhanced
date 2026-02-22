@@ -183,6 +183,10 @@ export async function activate(context: vscode.ExtensionContext) {
       vscode.commands.registerCommand("codetour.focusAudioPlayer", (index?: number) => {
         imageGalleryProvider.focusAudio(index ?? 0);
         vscode.commands.executeCommand("codetourEnhanced.imageGallery.focus");
+      }),
+      vscode.commands.registerCommand("codetour.focusTextEditor", () => {
+        imageGalleryProvider.focusText();
+        vscode.commands.executeCommand("codetourEnhanced.imageGallery.focus");
       })
     );
     console.log("CodeTour: Step Images, Step Audio, and Step Media providers registered");

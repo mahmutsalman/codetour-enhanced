@@ -103,6 +103,10 @@ export class StepContentViewProvider implements vscode.WebviewViewProvider {
         this._updateContent();
         break;
       }
+      case "focusBottomText": {
+        vscode.commands.executeCommand("codetour.focusTextEditor");
+        break;
+      }
     }
   }
 
@@ -265,6 +269,10 @@ No step selected.
     document.getElementById('editBtn').addEventListener('click', function() {
       vscode.postMessage({ type: 'requestEdit' });
     });
+    // Click anywhere on content to focus bottom panel text editor
+    document.getElementById('editor').addEventListener('click', function() {
+      vscode.postMessage({ type: 'focusBottomText' });
+    });
   </script>
 </body>
 </html>`;
@@ -339,11 +347,15 @@ No step selected.
     </div>
     <button class="edit-btn" id="editBtn">Edit</button>
   </div>
-  <div class="content">${escapeHtml(step.description || '')}</div>
+  <div class="content" id="contentArea">${escapeHtml(step.description || '')}</div>
   <script nonce="${nonce}">
     const vscode = acquireVsCodeApi();
     document.getElementById('editBtn').addEventListener('click', function() {
       vscode.postMessage({ type: 'requestEdit' });
+    });
+    // Click anywhere on content to focus bottom panel text editor
+    document.getElementById('contentArea').addEventListener('click', function() {
+      vscode.postMessage({ type: 'focusBottomText' });
     });
   </script>
 </body>

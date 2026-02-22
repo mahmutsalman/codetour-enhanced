@@ -6,13 +6,14 @@ import { saveTour } from "../recorder/commands";
 import { addImageToStep, updateImageColor, updateImageCaption } from "../utils/imageStorage";
 import { getClipboardImage } from "../utils/clipboard";
 import { convertAudiosToDataUrls, updateAudioCaption } from "../utils/audioStorage";
+import { markdownToDelta, deltaToMarkdown } from "../utils/markdownQuillConverter";
 
 export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = "codetourEnhanced.imageGallery";
 
   private _view?: vscode.WebviewView;
   private _currentIndex = 0;
-  private _mode: 'images' | 'audio' = 'images';
+  private _mode: 'images' | 'audio' | 'text' = 'images';
   private _audioIndex = 0;
   private _initialized = false;
   private _disposables: vscode.Disposable[] = [];
@@ -81,7 +82,9 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
           step?.images?.length ?? 0,
           step?.images?.map(i => `${i.id}:${i.color ?? ""}:${i.caption ?? ""}`).join(","),
           step?.audios?.length ?? 0,
-          step?.audios?.map(a => `${a.id}:${a.caption ?? ""}`).join(",")
+          step?.audios?.map(a => `${a.id}:${a.caption ?? ""}`).join(","),
+          step?.description ?? "",
+          step?.richDescription ? JSON.stringify(step.richDescription.delta) : ""
         ];
       },
       () => this._updateContent()
@@ -109,7 +112,12 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
     this._updateContent();
   }
 
-  public switchMode(mode: 'images' | 'audio') {
+  public focusText() {
+    this._mode = 'text';
+    this._updateContent();
+  }
+
+  public switchMode(mode: 'images' | 'audio' | 'text') {
     this._mode = mode;
     if (this._view && this._initialized) {
       this._view.webview.postMessage({ type: 'setMode', mode: this._mode });
@@ -213,6 +221,16 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
 
       case "paste": {
         await this._handlePaste(message.dataUrl);
+        break;
+      }
+
+      case "saveText": {
+        if (!store.activeTour) return;
+        const step = store.activeTour.tour.steps[store.activeTour.step];
+        if (!step) return;
+        step.richDescription = { delta: message.delta, html: message.html };
+        step.description = deltaToMarkdown(message.delta);
+        await saveTour(store.activeTour.tour);
         break;
       }
 
@@ -324,6 +342,8 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
     const autoPlay = this._pendingAutoPlay;
     this._pendingAutoPlay = false;
 
+    const textDelta = this._getTextDelta();
+
     this._view.webview.postMessage({
       type: 'fullUpdate',
       mode: this._mode,
@@ -332,7 +352,8 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
       audios,
       audioIndex: this._audioIndex,
       colorPresets: Object.keys(IMAGE_COLOR_PRESETS),
-      autoPlay
+      autoPlay,
+      textDelta
     });
   }
 
@@ -361,10 +382,26 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
     });
   }
 
+  private _getTextDelta(): any | null {
+    if (!store.activeTour) return null;
+    const step = store.activeTour.tour.steps[store.activeTour.step];
+    if (!step) return null;
+    if (step.richDescription?.delta) return step.richDescription.delta;
+    if (step.description) return markdownToDelta(step.description);
+    return null;
+  }
+
   // ─── SINGLE-PAGE HTML ──────────────────────────────────────────────
 
   private _getInitialHtml(webview: vscode.Webview): string {
     const nonce = getNonce();
+
+    const quillCssUri = webview.asWebviewUri(
+      vscode.Uri.joinPath(this._extensionUri, "dist", "assets", "quill.snow.css")
+    );
+    const quillJsUri = webview.asWebviewUri(
+      vscode.Uri.joinPath(this._extensionUri, "dist", "assets", "quill.js")
+    );
 
     const colorClasses = Object.entries(IMAGE_COLOR_PRESETS).map(([name, hex]) =>
       `.color-bg-${name} { background-color: ${hex}; }
@@ -377,7 +414,8 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'nonce-${nonce}'; script-src 'nonce-${nonce}' https://unpkg.com; img-src ${webview.cspSource} data:; media-src ${webview.cspSource} data: blob:; connect-src https: data: blob:;">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'nonce-${nonce}'; script-src 'nonce-${nonce}' https://unpkg.com; img-src ${webview.cspSource} data:; media-src ${webview.cspSource} data: blob:; connect-src https: data: blob:; font-src ${webview.cspSource};">
+  <link href="${quillCssUri}" rel="stylesheet">
   <style nonce="${nonce}">
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -410,7 +448,8 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
       transition: all 0.15s;
     }
     .mode-btn:first-child { border-radius: 3px 0 0 3px; }
-    .mode-btn:last-child { border-radius: 0 3px 3px 0; border-left: none; }
+    .mode-btn:last-child { border-radius: 0 3px 3px 0; }
+    .mode-btn + .mode-btn { border-left: none; }
     .mode-btn.active {
       background: var(--vscode-button-secondaryBackground);
       color: var(--vscode-foreground);
@@ -755,10 +794,112 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
       text-overflow: ellipsis;
       white-space: nowrap;
     }
+
+    /* ── Text Mode ── */
+    .text-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 6px 10px;
+      border-bottom: 1px solid var(--vscode-panel-border);
+      flex-shrink: 0;
+    }
+    .text-title {
+      font-size: 11px;
+      color: var(--vscode-descriptionForeground);
+      font-weight: 500;
+    }
+    .text-edit-btn {
+      background: var(--vscode-button-secondaryBackground, #3a3d41);
+      color: var(--vscode-button-secondaryForeground, #ccc);
+      border: none;
+      padding: 3px 10px;
+      border-radius: 2px;
+      cursor: pointer;
+      font-size: 11px;
+      font-family: var(--vscode-font-family);
+    }
+    .text-edit-btn:hover {
+      background: var(--vscode-button-secondaryHoverBackground, #45484d);
+    }
+    .text-editor-wrap {
+      flex: 1;
+      overflow-y: auto;
+      min-height: 0;
+    }
+    /* Quill read-only: hide toolbar, no border */
+    .text-editor-wrap .ql-toolbar.ql-snow { display: none !important; }
+    .text-editor-wrap .ql-container.ql-snow {
+      border: none !important;
+      font-family: var(--vscode-font-family, sans-serif);
+      font-size: var(--vscode-font-size, 13px);
+    }
+    .text-editor-wrap .ql-editor {
+      color: var(--vscode-foreground);
+      padding: 10px 12px;
+      line-height: 1.5;
+    }
+    /* Quill editing: show toolbar, theme-aware */
+    .text-editor-wrap.editing .ql-toolbar.ql-snow {
+      display: block !important;
+      border: none !important;
+      border-bottom: 1px solid var(--vscode-panel-border) !important;
+      background: var(--vscode-panel-background, var(--vscode-editor-background));
+    }
+    .text-editor-wrap.editing .ql-container.ql-snow {
+      border: none !important;
+    }
+    .text-editor-wrap .ql-editor.ql-blank::before {
+      color: var(--vscode-descriptionForeground);
+      font-style: italic;
+    }
+    /* Theme-aware Quill toolbar icons */
+    .text-editor-wrap .ql-snow .ql-stroke { stroke: var(--vscode-foreground) !important; }
+    .text-editor-wrap .ql-snow .ql-fill { fill: var(--vscode-foreground) !important; }
+    .text-editor-wrap .ql-snow .ql-picker-label { color: var(--vscode-foreground) !important; }
+    .text-editor-wrap .ql-snow .ql-picker-options {
+      background: var(--vscode-dropdown-background, #252526) !important;
+      border-color: var(--vscode-dropdown-border, #3c3c3c) !important;
+    }
+    .text-editor-wrap .ql-snow .ql-picker-item { color: var(--vscode-dropdown-foreground, #ccc) !important; }
+    .text-editor-wrap .ql-snow .ql-active .ql-stroke { stroke: var(--vscode-focusBorder, #007acc) !important; }
+    .text-editor-wrap .ql-snow .ql-active .ql-fill { fill: var(--vscode-focusBorder, #007acc) !important; }
+    .text-editor-wrap .ql-snow .ql-active { color: var(--vscode-focusBorder, #007acc) !important; }
+    .text-button-bar {
+      display: flex;
+      gap: 8px;
+      padding: 6px 10px;
+      border-top: 1px solid var(--vscode-panel-border);
+      flex-shrink: 0;
+      background: var(--vscode-panel-background, var(--vscode-editor-background));
+    }
+    .text-button-bar .btn-save {
+      background: var(--vscode-button-background, #0078d4);
+      color: var(--vscode-button-foreground, #fff);
+      border: none;
+      padding: 4px 12px;
+      border-radius: 2px;
+      cursor: pointer;
+      font-size: 11px;
+      font-family: var(--vscode-font-family);
+    }
+    .text-button-bar .btn-save:hover { background: var(--vscode-button-hoverBackground, #026ec1); }
+    .text-button-bar .btn-cancel {
+      background: var(--vscode-button-secondaryBackground, #3a3d41);
+      color: var(--vscode-button-secondaryForeground, #ccc);
+      border: none;
+      padding: 4px 12px;
+      border-radius: 2px;
+      cursor: pointer;
+      font-size: 11px;
+      font-family: var(--vscode-font-family);
+    }
+    .text-button-bar .btn-cancel:hover { background: var(--vscode-button-secondaryHoverBackground, #45484d); }
   </style>
 </head>
 <body>
   <div class="mode-toggle">
+    <button class="mode-btn" id="modeBtnText" data-action="switchMode" data-mode="text">Text</button>
     <button class="mode-btn active" id="modeBtnImages" data-action="switchMode" data-mode="images">Images</button>
     <button class="mode-btn" id="modeBtnAudio" data-action="switchMode" data-mode="audio">Audio</button>
   </div>
@@ -841,8 +982,27 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
     </div>
   </div>
 
+  <!-- TEXT MODE (hidden by default) -->
+  <div id="textMode" class="mode-container hidden">
+    <div id="textEmpty" class="empty" style="display:none"><p>No text content for this step.</p></div>
+    <div id="textContent" class="content-panel">
+      <div class="text-header">
+        <span class="text-title" id="textTitle">Step Content</span>
+        <button class="text-edit-btn" id="textEditBtn">Edit</button>
+      </div>
+      <div class="text-editor-wrap" id="textEditorWrap">
+        <div id="textEditor"></div>
+      </div>
+      <div class="text-button-bar" id="textButtonBar" style="display:none;">
+        <button class="btn-save" id="textSaveBtn">Save</button>
+        <button class="btn-cancel" id="textCancelBtn">Cancel</button>
+      </div>
+    </div>
+  </div>
+
   <div id="noTourOverlay" class="empty" style="display:none"><p>No tour is active.</p></div>
 
+  <script nonce="${nonce}" src="${quillJsUri}"></script>
   <script nonce="${nonce}" src="https://unpkg.com/wavesurfer.js@7.4.0/dist/wavesurfer.min.js"></script>
   <script nonce="${nonce}">
     (function() {
@@ -860,6 +1020,9 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
       var wsReady = false;
       var currentAudioSrc = null;
       var autoPlayOnReady = false;
+      var textDelta = null;
+      var textIsEditing = false;
+      var quillEditor = null;
 
       // ── DOM refs ──
       var el = {
@@ -895,7 +1058,18 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
         errorMessage: document.getElementById('errorMessage'),
         waveformProgress: document.getElementById('waveformProgress'),
         waveformCursor: document.getElementById('waveformCursor'),
-        audioCaptionInput: document.getElementById('audioCaptionInput')
+        audioCaptionInput: document.getElementById('audioCaptionInput'),
+        modeBtnText: document.getElementById('modeBtnText'),
+        textMode: document.getElementById('textMode'),
+        textEmpty: document.getElementById('textEmpty'),
+        textContent: document.getElementById('textContent'),
+        textTitle: document.getElementById('textTitle'),
+        textEditBtn: document.getElementById('textEditBtn'),
+        textEditorWrap: document.getElementById('textEditorWrap'),
+        textEditor: document.getElementById('textEditor'),
+        textButtonBar: document.getElementById('textButtonBar'),
+        textSaveBtn: document.getElementById('textSaveBtn'),
+        textCancelBtn: document.getElementById('textCancelBtn')
       };
 
       // ── Message handler ──
@@ -911,9 +1085,11 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
             imageIndex = msg.imageIndex || 0;
             audios = msg.audios || [];
             audioIndex = msg.audioIndex || 0;
+            textDelta = msg.textDelta || null;
             setMode(msg.mode);
             updateImages();
             updateAudio();
+            updateText();
             if (msg.autoPlay && audios.length > 0) {
               if (wavesurfer && wsReady) {
                 safePlay();
@@ -941,6 +1117,7 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
           case 'noTour':
             el.imageMode.classList.add('hidden');
             el.audioMode.classList.add('hidden');
+            el.textMode.classList.add('hidden');
             el.noTourOverlay.style.display = 'flex';
             break;
         }
@@ -952,11 +1129,18 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
         el.noTourOverlay.style.display = 'none';
         el.imageMode.classList.toggle('hidden', mode !== 'images');
         el.audioMode.classList.toggle('hidden', mode !== 'audio');
+        el.textMode.classList.toggle('hidden', mode !== 'text');
         el.modeBtnImages.className = 'mode-btn' + (mode === 'images' ? ' active' : '');
         el.modeBtnAudio.className = 'mode-btn' + (mode === 'audio' ? ' active' : '');
+        el.modeBtnText.className = 'mode-btn' + (mode === 'text' ? ' active' : '');
         // Update button labels with counts
         el.modeBtnImages.textContent = 'Images' + (images.length > 0 ? ' (' + images.length + ')' : '');
         el.modeBtnAudio.textContent = 'Audio' + (audios.length > 0 ? ' (' + audios.length + ')' : '');
+        el.modeBtnText.textContent = 'Text' + (textDelta ? ' \\u2713' : '');
+        // Lazy-init Quill when switching to text mode
+        if (mode === 'text') {
+          updateText();
+        }
       }
 
       // ── Image functions ──
@@ -1302,6 +1486,99 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
         return m + ':' + (sec < 10 ? '0' : '') + sec;
       }
 
+      // ── Text functions ──
+      function updateText() {
+        if (!textDelta) {
+          el.textEmpty.style.display = 'flex';
+          el.textContent.classList.remove('visible');
+          return;
+        }
+        el.textEmpty.style.display = 'none';
+        el.textContent.classList.add('visible');
+
+        // If editing, cancel the edit (step changed)
+        if (textIsEditing) {
+          textIsEditing = false;
+          el.textButtonBar.style.display = 'none';
+          el.textEditBtn.style.display = '';
+          el.textEditorWrap.classList.remove('editing');
+        }
+
+        initQuill(false);
+      }
+
+      function initQuill(editing) {
+        // Destroy previous instance
+        if (quillEditor) {
+          quillEditor = null;
+          el.textEditor.innerHTML = '';
+        }
+        if (typeof Quill === 'undefined') return;
+
+        if (editing) {
+          el.textEditorWrap.classList.add('editing');
+          quillEditor = new Quill('#textEditor', {
+            theme: 'snow',
+            placeholder: 'Write step content...',
+            modules: {
+              toolbar: [
+                ['bold', 'italic', 'underline', 'strike'],
+                [{ 'color': [] }, { 'background': [] }],
+                [{ 'header': [1, 2, 3, false] }],
+                [{ 'list': 'ordered' }, { 'list': 'bullet' }],
+                ['code-block', 'blockquote', 'link'],
+                ['clean']
+              ]
+            }
+          });
+        } else {
+          el.textEditorWrap.classList.remove('editing');
+          quillEditor = new Quill('#textEditor', {
+            theme: 'snow',
+            readOnly: true,
+            modules: { toolbar: false }
+          });
+        }
+
+        if (textDelta) {
+          try { quillEditor.setContents(textDelta); } catch(e) {}
+        }
+
+        if (editing) {
+          quillEditor.focus();
+        }
+      }
+
+      // Text edit button
+      el.textEditBtn.addEventListener('click', function() {
+        textIsEditing = true;
+        el.textEditBtn.style.display = 'none';
+        el.textButtonBar.style.display = 'flex';
+        initQuill(true);
+      });
+
+      // Text save button
+      el.textSaveBtn.addEventListener('click', function() {
+        if (!quillEditor) return;
+        var delta = quillEditor.getContents();
+        var html = quillEditor.root.innerHTML;
+        vscode.postMessage({ type: 'saveText', delta: delta, html: html });
+        textIsEditing = false;
+        el.textButtonBar.style.display = 'none';
+        el.textEditBtn.style.display = '';
+        // Switch to read-only
+        textDelta = delta;
+        initQuill(false);
+      });
+
+      // Text cancel button
+      el.textCancelBtn.addEventListener('click', function() {
+        textIsEditing = false;
+        el.textButtonBar.style.display = 'none';
+        el.textEditBtn.style.display = '';
+        initQuill(false);
+      });
+
       // ── Events ──
       // Click delegation
       document.addEventListener('click', function(e) {
@@ -1429,6 +1706,8 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
       // ── Keyboard shortcuts ──
       document.addEventListener('keydown', function(e) {
         if (e.target === el.captionInput || e.target === el.audioCaptionInput || e.target.tagName === 'SELECT') return;
+        // Let Quill handle its own keyboard events in text mode
+        if (currentMode === 'text') return;
         if (currentMode === 'images') {
           switch (e.key) {
             case 'ArrowLeft': e.preventDefault(); vscode.postMessage({ type: 'navigatePrev' }); break;

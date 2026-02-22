@@ -416,6 +416,12 @@
         "command": "codetour.pasteImageFromWebview",
         "title": "Paste Image from Webview",
         "category": "CodeTour Enhanced"
+      },
+      {
+        "command": "codetour.focusTextEditor",
+        "title": "Focus Text Editor",
+        "category": "CodeTour Enhanced",
+        "icon": "$(note)"
       }
     ],
     "menus": {
@@ -591,6 +597,10 @@
         {
           "command": "codetour.pasteImageFromWebview",
           "when": "false"
+        },
+        {
+          "command": "codetour.focusTextEditor",
+          "when": "codetour:inTour"
         }
       ],
       "comments/commentThread/title": [
