@@ -242,6 +242,14 @@ No step selected.
       padding: 12px;
       line-height: 1.5;
     }
+    .ql-editor code {
+      background: var(--vscode-textCodeBlock-background, rgba(255, 255, 255, 0.08));
+      color: var(--vscode-textPreformat-foreground, #ce9178);
+      padding: 1px 5px;
+      border-radius: 3px;
+      font-family: var(--vscode-editor-font-family, Consolas, monospace);
+      font-size: 0.9em;
+    }
   </style>
 </head>
 <body>
@@ -433,6 +441,14 @@ No step selected.
       color: var(--vscode-foreground);
       padding: 12px;
       min-height: 100px;
+    }
+    .ql-editor code {
+      background: var(--vscode-textCodeBlock-background, rgba(255, 255, 255, 0.08));
+      color: var(--vscode-textPreformat-foreground, #ce9178);
+      padding: 1px 5px;
+      border-radius: 3px;
+      font-family: var(--vscode-editor-font-family, Consolas, monospace);
+      font-size: 0.9em;
     }
     .ql-editor.ql-blank::before {
       color: var(--vscode-descriptionForeground);

@@ -839,6 +839,14 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
       padding: 10px 12px;
       line-height: 1.5;
     }
+    .text-editor-wrap .ql-editor code {
+      background: var(--vscode-textCodeBlock-background, rgba(255, 255, 255, 0.08));
+      color: var(--vscode-textPreformat-foreground, #ce9178);
+      padding: 1px 5px;
+      border-radius: 3px;
+      font-family: var(--vscode-editor-font-family, Consolas, monospace);
+      font-size: 0.9em;
+    }
     /* Quill editing: show toolbar, theme-aware */
     .text-editor-wrap.editing .ql-toolbar.ql-snow {
       display: block !important;
