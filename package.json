@@ -907,13 +907,19 @@
           "id": "codetourEnhanced.stepImages",
           "name": "Step Images",
           "when": "codetour:inTour"
+        },
+        {
+          "type": "webview",
+          "id": "codetourEnhanced.stepAudio",
+          "name": "Step Audio",
+          "when": "codetour:inTour"
         }
       ],
       "codetourEnhancedPanel": [
         {
           "type": "webview",
           "id": "codetourEnhanced.imageGallery",
-          "name": "Image Gallery",
+          "name": "Step Media",
           "when": "codetour:inTour"
         }
       ]

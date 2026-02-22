@@ -5,7 +5,6 @@ import * as vscode from "vscode";
 import { EXTENSION_NAME } from "../constants";
 import { store } from "../store";
 import { AudioRecordingManager } from "../audio/audioRecordingManager";
-import { AudioPlayerManager } from "../audio/audioPlayerManager";
 import { removeAudioFromStep, updateAudioTranscript, formatDuration, addAudioToStep } from "../utils/audioStorage";
 import { saveTour } from "./commands";
 
@@ -139,17 +138,22 @@ export function registerAudioCommands(context?: vscode.ExtensionContext) {
       }
 
       try {
-        const tour = store.activeTour.tour;
-        const stepIndex = store.activeTour.step;
-        const step = tour.steps[stepIndex];
+        const step = store.activeTour.tour.steps[store.activeTour.step];
 
         if (!step.audios || step.audios.length === 0) {
           vscode.window.showInformationMessage("No audio recordings found in current step");
           return;
         }
 
-        const player = AudioPlayerManager.getInstance(context?.extensionUri);
-        await player.openPlayer(tour, stepIndex, step.audios, audioPath);
+        // Find the index of the requested audio (default to 0)
+        let audioIndex = 0;
+        if (audioPath) {
+          const idx = step.audios.findIndex(a => a.path === audioPath);
+          if (idx >= 0) audioIndex = idx;
+        }
+
+        // Focus the bottom media panel in audio mode
+        vscode.commands.executeCommand("codetour.focusAudioPlayer", audioIndex);
 
       } catch (error) {
         console.error("Failed to play audio:", error);

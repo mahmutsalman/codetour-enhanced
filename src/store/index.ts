@@ -135,6 +135,7 @@ export interface Store {
   hasTours: boolean;
   isRecording: boolean;
   isEditing: boolean;
+  isAudioRecording: boolean;
   showMarkers: boolean;
   progress: CodeTourProgress[];
   tourSortMode: TourSortMode;
@@ -147,6 +148,7 @@ export const store: Store = observable({
   activeTour: null,
   isRecording: false,
   isEditing: false,
+  isAudioRecording: false,
   get hasTours() {
     return this.tours.length > 0;
   },

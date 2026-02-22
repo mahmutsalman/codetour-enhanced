@@ -18,6 +18,7 @@ import { GalleryManager } from "./gallery/galleryManager";
 import { StepContentViewProvider } from "./player/stepContentView";
 import { StepImagesViewProvider } from "./player/stepImagesView";
 import { ImageGalleryPanelProvider } from "./player/imageGalleryPanel";
+import { StepAudioViewProvider } from "./player/stepAudioView";
 
 /**
  * In order to check whether the URI handler was called on activation,
@@ -146,15 +147,31 @@ export async function activate(context: vscode.ExtensionContext) {
       )
     );
 
+    // Register Step Audio sidebar provider — wired to the same bottom media panel
+    const stepAudioProvider = new StepAudioViewProvider(context.extensionUri);
+    stepAudioProvider.setMediaProvider(imageGalleryProvider);
+
+    context.subscriptions.push(
+      vscode.window.registerWebviewViewProvider(
+        StepAudioViewProvider.viewType,
+        stepAudioProvider,
+        { webviewOptions: { retainContextWhenHidden: true } }
+      )
+    );
+
     context.subscriptions.push(
       vscode.commands.registerCommand("codetour.updateImageColor", () => {
         // Color updates are handled via webview message passing in the gallery panel
       }),
       vscode.commands.registerCommand("codetour.pasteImageFromWebview", () => {
         // Paste is handled via webview message passing in both panels
+      }),
+      vscode.commands.registerCommand("codetour.focusAudioPlayer", (index?: number) => {
+        imageGalleryProvider.focusAudio(index ?? 0);
+        vscode.commands.executeCommand("codetourEnhanced.imageGallery.focus");
       })
     );
-    console.log("CodeTour: Step Images and Image Gallery providers registered");
+    console.log("CodeTour: Step Images, Step Audio, and Step Media providers registered");
 
     // Initialize tour sorting and filtering preferences
     const initializePreferences = () => {

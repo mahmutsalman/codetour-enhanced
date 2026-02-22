@@ -6,7 +6,7 @@ import * as fs from "fs";
 import * as path from "path";
 import * as vscode from "vscode";
 import { saveTour } from "../recorder/commands";
-import { CodeTour } from "../store";
+import { CodeTour, store } from "../store";
 import { addAudioToStep } from "../utils/audioStorage";
 
 interface RecordingProcess {
@@ -514,6 +514,8 @@ export class AudioRecordingManager {
         startTime: Date.now()
       };
 
+      store.isAudioRecording = true;
+
       // Set up status bar and start timer
       this.createStatusBarItem();
       this.startRecordingTimer(hasSox);
@@ -875,6 +877,8 @@ export class AudioRecordingManager {
 
       this.recordingProcess = null;
     }
+
+    store.isAudioRecording = false;
 
     if (this.statusBarItem) {
       this.statusBarItem.hide();

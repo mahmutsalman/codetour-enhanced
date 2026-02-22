@@ -1,16 +1,19 @@
 import { reaction } from "mobx";
 import * as vscode from "vscode";
-import { store, CodeTourStepImage } from "../store";
+import { store, CodeTourStepImage, CodeTourStepAudio } from "../store";
 import { IMAGE_COLOR_PRESETS } from "../constants";
 import { saveTour } from "../recorder/commands";
 import { addImageToStep, updateImageColor, updateImageCaption } from "../utils/imageStorage";
 import { getClipboardImage } from "../utils/clipboard";
+import { getAudioUri } from "../utils/audioStorage";
 
 export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = "codetourEnhanced.imageGallery";
 
   private _view?: vscode.WebviewView;
   private _currentIndex = 0;
+  private _mode: 'images' | 'audio' = 'images';
+  private _audioIndex = 0;
   private _disposables: vscode.Disposable[] = [];
 
   constructor(private readonly _extensionUri: vscode.Uri) {}
@@ -43,7 +46,9 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
         return [
           store.activeTour.step,
           step?.images?.length ?? 0,
-          step?.images?.map(i => `${i.id}:${i.color ?? ""}:${i.caption ?? ""}`).join(",")
+          step?.images?.map(i => `${i.id}:${i.color ?? ""}:${i.caption ?? ""}`).join(","),
+          step?.audios?.length ?? 0,
+          step?.audios?.map(a => a.id).join(",")
         ];
       },
       () => this._updateContent()
@@ -59,7 +64,19 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
   }
 
   public focusImage(index: number) {
+    this._mode = 'images';
     this._currentIndex = index;
+    this._updateContent();
+  }
+
+  public focusAudio(index: number) {
+    this._mode = 'audio';
+    this._audioIndex = index;
+    this._updateContent();
+  }
+
+  public switchMode(mode: 'images' | 'audio') {
+    this._mode = mode;
     this._updateContent();
   }
 
@@ -69,8 +86,21 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
     return step?.images ?? [];
   }
 
+  private _getAudios(): CodeTourStepAudio[] {
+    if (!store.activeTour) return [];
+    const step = store.activeTour.tour.steps[store.activeTour.step];
+    return step?.audios ?? [];
+  }
+
   private async _handleMessage(message: any) {
     switch (message.type) {
+      // Mode switching
+      case "switchMode":
+        this._mode = message.mode;
+        this._updateContent();
+        break;
+
+      // Image navigation
       case "navigatePrev": {
         const images = this._getImages();
         if (images.length <= 1) return;
@@ -92,6 +122,29 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
         this._updateContent();
         break;
 
+      // Audio navigation
+      case "audioNavigatePrev": {
+        const audios = this._getAudios();
+        if (audios.length <= 1) return;
+        this._audioIndex = (this._audioIndex - 1 + audios.length) % audios.length;
+        this._updateContent();
+        break;
+      }
+
+      case "audioNavigateNext": {
+        const audios = this._getAudios();
+        if (audios.length <= 1) return;
+        this._audioIndex = (this._audioIndex + 1) % audios.length;
+        this._updateContent();
+        break;
+      }
+
+      case "audioNavigateTo":
+        this._audioIndex = message.index;
+        this._updateContent();
+        break;
+
+      // Image actions
       case "setColor": {
         if (!store.activeTour) return;
         const { imageId, color } = message;
@@ -145,15 +198,71 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
     await saveTour(store.activeTour.tour);
     const images = this._getImages();
     this._currentIndex = Math.max(0, images.length - 1);
+    this._mode = 'images';
     this._updateContent();
   }
 
   private _updateContent() {
     if (!this._view) return;
-    this._view.webview.html = this._getHtml(this._view.webview);
+    if (this._mode === 'audio') {
+      this._updateAudioContent();
+    } else {
+      this._view.webview.html = this._getImageHtml(this._view.webview);
+    }
   }
 
-  private _getHtml(webview: vscode.Webview): string {
+  private async _updateAudioContent() {
+    if (!this._view) return;
+    this._view.webview.html = await this._getAudioHtml(this._view.webview);
+  }
+
+  private _getModeToggleHtml(nonce: string): string {
+    return `
+    .mode-toggle {
+      display: flex;
+      gap: 0;
+      padding: 4px 10px;
+      border-bottom: 1px solid var(--vscode-panel-border);
+      flex-shrink: 0;
+      background: var(--vscode-panel-background, var(--vscode-editor-background));
+    }
+    .mode-btn {
+      flex: 1;
+      padding: 4px 8px;
+      border: 1px solid var(--vscode-panel-border);
+      background: transparent;
+      color: var(--vscode-descriptionForeground);
+      cursor: pointer;
+      font-size: 11px;
+      font-family: var(--vscode-font-family);
+      transition: all 0.15s;
+    }
+    .mode-btn:first-child { border-radius: 3px 0 0 3px; }
+    .mode-btn:last-child { border-radius: 0 3px 3px 0; border-left: none; }
+    .mode-btn.active {
+      background: var(--vscode-button-secondaryBackground);
+      color: var(--vscode-foreground);
+      font-weight: 500;
+    }
+    .mode-btn:hover:not(.active) {
+      background: var(--vscode-list-hoverBackground);
+    }`;
+  }
+
+  private _getModeToggleBodyHtml(): string {
+    const imageCount = this._getImages().length;
+    const audioCount = this._getAudios().length;
+    return `<div class="mode-toggle">
+      <button class="mode-btn ${this._mode === 'images' ? 'active' : ''}"
+              data-action="switchMode" data-mode="images">Images${imageCount > 0 ? ` (${imageCount})` : ''}</button>
+      <button class="mode-btn ${this._mode === 'audio' ? 'active' : ''}"
+              data-action="switchMode" data-mode="audio">Audio${audioCount > 0 ? ` (${audioCount})` : ''}</button>
+    </div>`;
+  }
+
+  // ─── IMAGE MODE HTML (existing, extracted) ────────────────────────────
+
+  private _getImageHtml(webview: vscode.Webview): string {
     const nonce = getNonce();
     const images = this._getImages();
 
@@ -203,7 +312,7 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'nonce-${nonce}'; script-src 'nonce-${nonce}'; img-src ${webview.cspSource} data:;">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'nonce-${nonce}'; script-src 'nonce-${nonce}'; img-src ${webview.cspSource} data:; media-src ${webview.cspSource} data: blob:; connect-src https: data: blob:;">
   <style nonce="${nonce}">
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -216,6 +325,7 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
       flex-direction: column;
       overflow: hidden;
     }
+    ${this._getModeToggleHtml(nonce)}
     .controls {
       display: flex;
       align-items: center;
@@ -318,6 +428,8 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
   </style>
 </head>
 <body>
+  ${this._getModeToggleBodyHtml()}
+
   <div class="controls">
     <span class="counter">${this._currentIndex + 1} / ${images.length}</span>
     ${colorButtonsHtml}
@@ -347,14 +459,15 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
       var currentImageId = '${currentImage.id}';
       var currentColor = ${currentImage.color ? `'${currentImage.color}'` : 'null'};
 
-      // Event delegation: handle all clicks via data-action attributes
       document.addEventListener('click', function(e) {
         var el = e.target;
-        // Walk up to find element with data-action (max 3 levels)
         for (var i = 0; i < 3 && el && el !== document; i++) {
           var action = el.getAttribute && el.getAttribute('data-action');
           if (action) {
             switch (action) {
+              case 'switchMode':
+                vscode.postMessage({ type: 'switchMode', mode: el.getAttribute('data-mode') });
+                break;
               case 'navPrev':
                 vscode.postMessage({ type: 'navigatePrev' });
                 break;
@@ -378,7 +491,6 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
         }
       });
 
-      // Caption editing with debounce
       var captionInput = document.getElementById('captionInput');
       var captionTimer;
       captionInput.addEventListener('input', function() {
@@ -392,7 +504,6 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
         }, 500);
       });
 
-      // Zoom & pan
       var zoom = 1, panX = 0, panY = 0;
       var mainImg = document.getElementById('mainImg');
       var imageArea = document.getElementById('imageArea');
@@ -429,7 +540,6 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
         if (dragging) { dragging = false; mainImg.classList.remove('dragging'); }
       });
 
-      // Keyboard shortcuts
       document.addEventListener('keydown', function(e) {
         if (e.target === captionInput) return;
         switch (e.key) {
@@ -448,7 +558,6 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
         }
       });
 
-      // Paste (Cmd+V)
       document.addEventListener('paste', function(e) {
         var items = e.clipboardData && e.clipboardData.items;
         if (items) {
@@ -470,7 +579,6 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
         vscode.postMessage({ type: 'paste' });
       });
 
-      // Scroll active thumbnail into view
       setTimeout(function() {
         var active = document.querySelector('.thumb.active');
         if (active) active.scrollIntoView({ behavior: 'auto', inline: 'center' });
@@ -481,21 +589,527 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
 </html>`;
   }
 
-  private _emptyHtml(nonce: string, webview: vscode.Webview, message: string): string {
+  // ─── AUDIO MODE HTML ──────────────────────────────────────────────────
+
+  private async _getAudioHtml(webview: vscode.Webview): Promise<string> {
+    const nonce = getNonce();
+    const audios = this._getAudios();
+
+    if (!store.activeTour) {
+      return this._emptyHtml(nonce, webview, "No tour is active.");
+    }
+
+    if (audios.length === 0) {
+      return this._audioEmptyHtml(nonce, webview);
+    }
+
+    if (this._audioIndex >= audios.length) this._audioIndex = audios.length - 1;
+    if (this._audioIndex < 0) this._audioIndex = 0;
+
+    const audioList = await this._convertAudiosForWebview(audios);
+
+    const audioStripHtml = audios.map((audio, idx) => {
+      const active = idx === this._audioIndex ? "active" : "";
+      const duration = formatDuration(audio.duration);
+      return `<div class="audio-thumb ${active}" data-action="audioNavigateTo" data-index="${idx}"
+                   title="${escapeHtml(audio.filename)} (${duration})">
+        <span class="audio-thumb-icon">&#x266B;</span>
+        <span class="audio-thumb-name">${escapeHtml(audio.filename.replace(/\.[^.]+$/, ''))}</span>
+      </div>`;
+    }).join("");
+
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'nonce-${nonce}'; script-src 'nonce-${nonce}' https://unpkg.com; img-src ${webview.cspSource} data:; media-src ${webview.cspSource} data: blob:; connect-src https: data: blob:;">
+  <style nonce="${nonce}">
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: var(--vscode-font-family);
+      font-size: var(--vscode-font-size, 13px);
+      color: var(--vscode-foreground);
+      background: var(--vscode-panel-background, var(--vscode-editor-background));
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    ${this._getModeToggleHtml(nonce)}
+    .audio-controls {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 10px;
+      border-bottom: 1px solid var(--vscode-panel-border);
+      flex-shrink: 0;
+    }
+    .counter {
+      font-size: 11px;
+      color: var(--vscode-descriptionForeground);
+      margin-right: auto;
+    }
+    .nav-btn {
+      background: var(--vscode-button-secondaryBackground);
+      color: var(--vscode-button-secondaryForeground);
+      border: none;
+      width: 24px; height: 24px;
+      border-radius: 3px;
+      cursor: pointer;
+      font-size: 14px;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .nav-btn:hover { background: var(--vscode-button-secondaryHoverBackground); }
+    .player-area {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: auto;
+      padding: 10px;
+      min-height: 0;
+    }
+    .waveform-box {
+      border: 1px solid var(--vscode-input-border);
+      border-radius: 4px;
+      background: var(--vscode-input-background);
+      overflow: hidden;
+      margin-bottom: 10px;
+    }
+    .waveform-loading {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 80px;
+      color: var(--vscode-descriptionForeground);
+      font-style: italic;
+      font-size: 12px;
+    }
+    .playback-controls {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 10px;
+      background: var(--vscode-input-background);
+      border-radius: 6px;
+      margin-bottom: 8px;
+    }
+    .play-btn {
+      width: 36px; height: 36px;
+      border-radius: 50%;
+      border: none;
+      background: var(--vscode-button-background);
+      color: var(--vscode-button-foreground);
+      font-size: 16px;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .play-btn:hover { background: var(--vscode-button-hoverBackground); }
+    .play-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .time-display {
+      font-family: var(--vscode-editor-font-family);
+      font-size: 11px;
+      color: var(--vscode-badge-foreground);
+      background: var(--vscode-badge-background);
+      padding: 2px 6px;
+      border-radius: 8px;
+      min-width: 70px;
+      text-align: center;
+    }
+    .speed-select {
+      padding: 3px 6px;
+      border: 1px solid var(--vscode-input-border);
+      background: var(--vscode-input-background);
+      color: var(--vscode-input-foreground);
+      border-radius: 3px;
+      font-size: 11px;
+      cursor: pointer;
+    }
+    .volume-group {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      margin-left: auto;
+    }
+    .volume-icon { font-size: 12px; }
+    .volume-slider {
+      width: 60px; height: 3px;
+      border-radius: 2px;
+      background: var(--vscode-input-border);
+      outline: none; cursor: pointer;
+      -webkit-appearance: none;
+    }
+    .volume-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      background: var(--vscode-button-background);
+      cursor: pointer;
+    }
+    .zoom-group {
+      display: flex; gap: 3px;
+    }
+    .zoom-btn {
+      width: 22px; height: 22px;
+      border: 1px solid var(--vscode-button-border, var(--vscode-panel-border));
+      background: var(--vscode-button-secondaryBackground);
+      color: var(--vscode-button-secondaryForeground);
+      border-radius: 3px;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 11px;
+    }
+    .zoom-btn:hover { background: var(--vscode-button-secondaryHoverBackground); }
+    .audio-title {
+      font-size: 11px;
+      color: var(--vscode-descriptionForeground);
+      padding: 4px 10px;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .playing-indicator {
+      display: inline-flex; gap: 1px;
+    }
+    .playing-bar {
+      width: 2px;
+      background: var(--vscode-charts-green, #22863a);
+      animation: audioBar 1.2s ease-in-out infinite;
+    }
+    .playing-bar:nth-child(1) { height: 10px; animation-delay: 0s; }
+    .playing-bar:nth-child(2) { height: 14px; animation-delay: 0.1s; }
+    .playing-bar:nth-child(3) { height: 12px; animation-delay: 0.2s; }
+    .playing-bar:nth-child(4) { height: 15px; animation-delay: 0.3s; }
+    @keyframes audioBar {
+      0%, 40%, 100% { transform: scaleY(0.4); }
+      20% { transform: scaleY(1.0); }
+    }
+    .transcript-box {
+      margin-top: 6px;
+      padding: 8px 10px;
+      background: var(--vscode-textBlockQuote-background);
+      border-left: 3px solid var(--vscode-textBlockQuote-border);
+      border-radius: 0 3px 3px 0;
+      font-size: 11px;
+      font-style: italic;
+      color: var(--vscode-textBlockQuote-foreground);
+      line-height: 1.5;
+    }
+    .transcript-label { font-weight: 600; margin-bottom: 4px; font-style: normal; }
+    .error-msg {
+      padding: 6px 10px;
+      background: var(--vscode-inputValidation-errorBackground);
+      border: 1px solid var(--vscode-inputValidation-errorBorder);
+      color: var(--vscode-inputValidation-errorForeground);
+      border-radius: 3px;
+      font-size: 11px;
+      display: none;
+    }
+    .audio-strip {
+      display: flex;
+      gap: 6px;
+      padding: 6px 10px;
+      overflow-x: auto;
+      border-top: 1px solid var(--vscode-panel-border);
+      flex-shrink: 0;
+      align-items: center;
+      scroll-behavior: smooth;
+    }
+    .audio-strip::-webkit-scrollbar { height: 4px; }
+    .audio-strip::-webkit-scrollbar-thumb {
+      background: var(--vscode-scrollbarSlider-background);
+      border-radius: 2px;
+    }
+    .audio-thumb {
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px 8px;
+      border: 1px solid var(--vscode-panel-border);
+      border-radius: 3px;
+      cursor: pointer;
+      font-size: 10px;
+      color: var(--vscode-descriptionForeground);
+      transition: all 0.15s;
+      max-width: 100px;
+      overflow: hidden;
+    }
+    .audio-thumb:hover { background: var(--vscode-list-hoverBackground); }
+    .audio-thumb.active {
+      border-color: var(--vscode-focusBorder);
+      background: var(--vscode-list-activeSelectionBackground);
+      color: var(--vscode-list-activeSelectionForeground);
+    }
+    .audio-thumb-icon { font-size: 12px; }
+    .audio-thumb-name {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+  </style>
+</head>
+<body>
+  ${this._getModeToggleBodyHtml()}
+
+  <div class="audio-controls">
+    <span class="counter">${this._audioIndex + 1} / ${audios.length}</span>
+    <button class="nav-btn" data-action="audioNavPrev" title="Previous">&#x276E;</button>
+    <button class="nav-btn" data-action="audioNavNext" title="Next">&#x276F;</button>
+  </div>
+
+  <div class="player-area">
+    <div class="waveform-box">
+      <div class="waveform-loading" id="waveformLoading">Loading waveform...</div>
+      <div id="waveform"></div>
+    </div>
+
+    <div class="playback-controls">
+      <button class="play-btn" id="playPauseBtn" disabled>&#x25B6;</button>
+      <div class="time-display" id="timeDisplay">0:00 / 0:00</div>
+      <select class="speed-select" id="speedSelector">
+        <option value="0.5">0.5x</option>
+        <option value="0.75">0.75x</option>
+        <option value="1" selected>1x</option>
+        <option value="1.25">1.25x</option>
+        <option value="1.5">1.5x</option>
+        <option value="2">2x</option>
+      </select>
+      <div class="volume-group">
+        <span class="volume-icon" id="volumeIcon">&#x1F50A;</span>
+        <input type="range" id="volumeSlider" class="volume-slider" min="0" max="100" value="100">
+      </div>
+      <div class="zoom-group">
+        <button class="zoom-btn" id="zoomOutBtn" title="Zoom Out">-</button>
+        <button class="zoom-btn" id="zoomInBtn" title="Zoom In">+</button>
+      </div>
+    </div>
+
+    <div class="audio-title" id="audioTitle">
+      <span id="titleText">${escapeHtml(audios[this._audioIndex]?.filename || '')}</span>
+      <div id="playingIndicator" class="playing-indicator" style="display:none;">
+        <div class="playing-bar"></div>
+        <div class="playing-bar"></div>
+        <div class="playing-bar"></div>
+        <div class="playing-bar"></div>
+      </div>
+    </div>
+
+    ${audios[this._audioIndex]?.transcript ? `
+    <div class="transcript-box">
+      <div class="transcript-label">Transcript</div>
+      <div>${escapeHtml(audios[this._audioIndex].transcript!)}</div>
+    </div>` : ''}
+
+    <div class="error-msg" id="errorMessage"></div>
+  </div>
+
+  <div class="audio-strip" id="audioStrip">
+    ${audioStripHtml}
+  </div>
+
+  <script nonce="${nonce}" src="https://unpkg.com/wavesurfer.js@7.10.1/dist/wavesurfer.min.js"></script>
+  <script nonce="${nonce}">
+    (function() {
+      var vscode = acquireVsCodeApi();
+      var audios = ${JSON.stringify(audioList)};
+      var currentAudioIdx = ${this._audioIndex};
+      var wavesurfer = null;
+      var isPlaying = false;
+
+      var el = {
+        playPauseBtn: document.getElementById('playPauseBtn'),
+        timeDisplay: document.getElementById('timeDisplay'),
+        speedSelector: document.getElementById('speedSelector'),
+        volumeSlider: document.getElementById('volumeSlider'),
+        volumeIcon: document.getElementById('volumeIcon'),
+        zoomInBtn: document.getElementById('zoomInBtn'),
+        zoomOutBtn: document.getElementById('zoomOutBtn'),
+        waveformLoading: document.getElementById('waveformLoading'),
+        titleText: document.getElementById('titleText'),
+        playingIndicator: document.getElementById('playingIndicator'),
+        errorMessage: document.getElementById('errorMessage')
+      };
+
+      init();
+
+      function init() {
+        if (typeof WaveSurfer === 'undefined') {
+          setTimeout(init, 100);
+          return;
+        }
+        initWaveSurfer();
+        setupEvents();
+        if (audios.length > 0) {
+          loadAudio(audios[currentAudioIdx] || audios[0]);
+        }
+      }
+
+      function initWaveSurfer() {
+        try {
+          wavesurfer = WaveSurfer.create({
+            container: '#waveform',
+            waveColor: 'rgba(54, 162, 235, 0.8)',
+            progressColor: 'rgba(34, 134, 58, 1)',
+            cursorColor: 'rgba(255, 193, 7, 1)',
+            barWidth: 2,
+            barRadius: 3,
+            responsive: true,
+            height: 80,
+            normalize: true,
+            backend: 'WebAudio',
+            interact: true,
+            hideScrollbar: false
+          });
+
+          wavesurfer.on('ready', function() {
+            el.waveformLoading.style.display = 'none';
+            el.playPauseBtn.disabled = false;
+            updateTime();
+          });
+          wavesurfer.on('loading', function(p) {
+            el.waveformLoading.textContent = 'Loading waveform... ' + p + '%';
+            el.waveformLoading.style.display = 'flex';
+          });
+          wavesurfer.on('play', function() {
+            isPlaying = true;
+            el.playPauseBtn.textContent = '\\u23F8';
+            el.playingIndicator.style.display = 'inline-flex';
+          });
+          wavesurfer.on('pause', function() {
+            isPlaying = false;
+            el.playPauseBtn.textContent = '\\u25B6';
+            el.playingIndicator.style.display = 'none';
+          });
+          wavesurfer.on('finish', function() {
+            isPlaying = false;
+            el.playPauseBtn.textContent = '\\u25B6';
+            el.playingIndicator.style.display = 'none';
+          });
+          wavesurfer.on('timeupdate', updateTime);
+          wavesurfer.on('error', function(err) {
+            el.errorMessage.textContent = 'Audio error: ' + (err.message || err);
+            el.errorMessage.style.display = 'block';
+            el.waveformLoading.style.display = 'none';
+          });
+        } catch (err) {
+          el.errorMessage.textContent = 'Failed to init player: ' + err.message;
+          el.errorMessage.style.display = 'block';
+        }
+      }
+
+      function loadAudio(audio) {
+        if (!audio || !wavesurfer) return;
+        el.waveformLoading.style.display = 'flex';
+        el.waveformLoading.textContent = 'Loading waveform...';
+        el.playPauseBtn.disabled = true;
+        el.errorMessage.style.display = 'none';
+        el.titleText.textContent = audio.filename;
+        var src = audio.dataUrl || audio.uri;
+        if (src) wavesurfer.load(src);
+      }
+
+      function updateTime() {
+        if (!wavesurfer) return;
+        var cur = fmtTime(wavesurfer.getCurrentTime() || 0);
+        var dur = fmtTime(wavesurfer.getDuration() || 0);
+        el.timeDisplay.textContent = cur + ' / ' + dur;
+      }
+
+      function fmtTime(s) {
+        if (!s || !isFinite(s)) return '0:00';
+        var m = Math.floor(s / 60);
+        var sec = Math.floor(s % 60);
+        return m + ':' + (sec < 10 ? '0' : '') + sec;
+      }
+
+      function setupEvents() {
+        el.playPauseBtn.addEventListener('click', function() {
+          if (wavesurfer) wavesurfer.playPause();
+        });
+        el.speedSelector.addEventListener('change', function() {
+          if (wavesurfer) wavesurfer.setPlaybackRate(parseFloat(el.speedSelector.value));
+        });
+        el.volumeSlider.addEventListener('input', function() {
+          if (!wavesurfer) return;
+          var v = parseInt(el.volumeSlider.value) / 100;
+          wavesurfer.setVolume(v);
+          el.volumeIcon.textContent = v === 0 ? '\\uD83D\\uDD07' : v < 0.5 ? '\\uD83D\\uDD09' : '\\uD83D\\uDD0A';
+        });
+        el.zoomInBtn.addEventListener('click', function() {
+          if (wavesurfer) wavesurfer.zoom(wavesurfer.options.minPxPerSec * 1.5);
+        });
+        el.zoomOutBtn.addEventListener('click', function() {
+          if (wavesurfer) wavesurfer.zoom(wavesurfer.options.minPxPerSec * 0.75);
+        });
+
+        document.addEventListener('click', function(e) {
+          var t = e.target;
+          for (var i = 0; i < 3 && t && t !== document; i++) {
+            var action = t.getAttribute && t.getAttribute('data-action');
+            if (action) {
+              switch (action) {
+                case 'switchMode':
+                  vscode.postMessage({ type: 'switchMode', mode: t.getAttribute('data-mode') });
+                  break;
+                case 'audioNavPrev':
+                  vscode.postMessage({ type: 'audioNavigatePrev' });
+                  break;
+                case 'audioNavNext':
+                  vscode.postMessage({ type: 'audioNavigateNext' });
+                  break;
+                case 'audioNavigateTo':
+                  vscode.postMessage({ type: 'audioNavigateTo', index: parseInt(t.getAttribute('data-index')) });
+                  break;
+              }
+              return;
+            }
+            t = t.parentElement;
+          }
+        });
+
+        document.addEventListener('keydown', function(e) {
+          if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+          switch (e.code) {
+            case 'Space': e.preventDefault(); if (wavesurfer) wavesurfer.playPause(); break;
+            case 'ArrowLeft': e.preventDefault(); if (wavesurfer) wavesurfer.skip(-5); break;
+            case 'ArrowRight': e.preventDefault(); if (wavesurfer) wavesurfer.skip(5); break;
+          }
+        });
+      }
+
+      setTimeout(function() {
+        var active = document.querySelector('.audio-thumb.active');
+        if (active) active.scrollIntoView({ behavior: 'auto', inline: 'center' });
+      }, 50);
+    })();
+  </script>
+</body>
+</html>`;
+  }
+
+  private _audioEmptyHtml(nonce: string, webview: vscode.Webview): string {
     return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'nonce-${nonce}'; script-src 'nonce-${nonce}'; img-src ${webview.cspSource} data:;">
   <style nonce="${nonce}">
+    * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       font-family: var(--vscode-font-family);
       color: var(--vscode-descriptionForeground);
       background: var(--vscode-panel-background, var(--vscode-editor-background));
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    ${this._getModeToggleHtml(nonce)}
+    .empty {
+      flex: 1;
       display: flex;
       align-items: center;
       justify-content: center;
-      height: 100vh;
       padding: 16px;
       text-align: center;
       font-size: 12px;
@@ -503,10 +1117,110 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
   </style>
 </head>
 <body>
-  <p>${escapeHtml(message)}</p>
+  ${this._getModeToggleBodyHtml()}
+  <div class="empty"><p>No audio recordings for this step.</p></div>
   <script nonce="${nonce}">
     (function() {
       var vscode = acquireVsCodeApi();
+      document.addEventListener('click', function(e) {
+        var t = e.target;
+        for (var i = 0; i < 3 && t && t !== document; i++) {
+          var action = t.getAttribute && t.getAttribute('data-action');
+          if (action === 'switchMode') {
+            vscode.postMessage({ type: 'switchMode', mode: t.getAttribute('data-mode') });
+            return;
+          }
+          t = t.parentElement;
+        }
+      });
+    })();
+  </script>
+</body>
+</html>`;
+  }
+
+  // ─── AUDIO DATA CONVERSION ────────────────────────────────────────────
+
+  private async _convertAudiosForWebview(audios: CodeTourStepAudio[]): Promise<any[]> {
+    const workspaceUri = vscode.workspace.workspaceFolders?.[0]?.uri;
+    if (!workspaceUri) return [];
+
+    const results = await Promise.all(audios.map(async (audio) => {
+      try {
+        const audioUri = getAudioUri(audio, workspaceUri);
+        const audioData = await vscode.workspace.fs.readFile(audioUri);
+        const base64 = Buffer.from(audioData).toString('base64');
+        const mimeType = getMimeType(audio.format);
+        return {
+          id: audio.id,
+          filename: audio.filename,
+          duration: audio.duration,
+          format: audio.format,
+          transcript: audio.transcript,
+          dataUrl: `data:${mimeType};base64,${base64}`
+        };
+      } catch {
+        return {
+          id: audio.id,
+          filename: audio.filename,
+          duration: audio.duration,
+          format: audio.format,
+          transcript: audio.transcript
+        };
+      }
+    }));
+
+    return results;
+  }
+
+  // ─── EMPTY HTML (shared) ──────────────────────────────────────────────
+
+  private _emptyHtml(nonce: string, webview: vscode.Webview, message: string): string {
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'nonce-${nonce}'; script-src 'nonce-${nonce}'; img-src ${webview.cspSource} data:; media-src ${webview.cspSource} data: blob:; connect-src https: data: blob:;">
+  <style nonce="${nonce}">
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: var(--vscode-font-family);
+      color: var(--vscode-descriptionForeground);
+      background: var(--vscode-panel-background, var(--vscode-editor-background));
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    ${this._getModeToggleHtml(nonce)}
+    .empty {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      text-align: center;
+      font-size: 12px;
+    }
+  </style>
+</head>
+<body>
+  ${this._getModeToggleBodyHtml()}
+  <div class="empty"><p>${escapeHtml(message)}</p></div>
+  <script nonce="${nonce}">
+    (function() {
+      var vscode = acquireVsCodeApi();
+      document.addEventListener('click', function(e) {
+        var t = e.target;
+        for (var i = 0; i < 3 && t && t !== document; i++) {
+          var action = t.getAttribute && t.getAttribute('data-action');
+          if (action === 'switchMode') {
+            vscode.postMessage({ type: 'switchMode', mode: t.getAttribute('data-mode') });
+            return;
+          }
+          t = t.parentElement;
+        }
+      });
       document.addEventListener('paste', function(e) {
         var items = e.clipboardData && e.clipboardData.items;
         if (items) {
@@ -550,4 +1264,23 @@ function escapeHtml(text: string): string {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#039;");
+}
+
+function formatDuration(seconds: number): string {
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = Math.floor(seconds % 60);
+  return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+}
+
+function getMimeType(format: string): string {
+  switch (format.toLowerCase()) {
+    case 'wav': return 'audio/wav';
+    case 'mp3': return 'audio/mpeg';
+    case 'ogg': return 'audio/ogg';
+    case 'webm': return 'audio/webm';
+    case 'm4a': return 'audio/mp4';
+    case 'aac': return 'audio/aac';
+    case 'flac': return 'audio/flac';
+    default: return 'audio/wav';
+  }
 }
