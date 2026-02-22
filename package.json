@@ -595,21 +595,6 @@
       ],
       "comments/commentThread/title": [
         {
-          "command": "codetour.previousTourStep",
-          "group": "inline@1",
-          "when": "commentController == codetour && commentThread =~ /hasPrevious/"
-        },
-        {
-          "command": "codetour.nextTourStep",
-          "group": "inline@2",
-          "when": "commentController == codetour && commentThread =~ /hasNext/"
-        },
-        {
-          "command": "codetour.endTour",
-          "group": "inline@3",
-          "when": "commentController == codetour"
-        },
-        {
           "command": "codetour.editTour",
           "group": "inline@4",
           "when": "commentController == codetour && !codetour:isEditing && codetour:canEditTour"

@@ -21,15 +21,13 @@ import {
   window,
   workspace
 } from "vscode";
-import { SMALL_ICON_URL, CODE_BLOCK_COLLAPSE_THRESHOLD, MAX_INLINE_CODE_BLOCKS, CONTENT_LENGTH_THRESHOLD } from "../constants";
-import { CodeTour, CodeTourStep, store } from "../store";
+import { SMALL_ICON_URL, CODE_BLOCK_COLLAPSE_THRESHOLD, MAX_INLINE_CODE_BLOCKS } from "../constants";
+import { CodeTourStep, store } from "../store";
 import { initializeStorage } from "../store/storage";
 import {
   getActiveStepMarker,
-  getActiveTourNumber,
   getFileUri,
   getStepFileUri,
-  getStepLabel,
   getTourTitle
 } from "../utils";
 import { registerCodeStatusModule } from "./codeStatus";
@@ -87,26 +85,6 @@ ${code}\`\`\`
 </details>`;
     }
   );
-}
-
-/**
- * Generates a compact media link instead of inline galleries.
- * Reduces content height to help with CommentThread scroll limitations.
- */
-function generateCompactMediaLink(step: CodeTourStep): string {
-  const imageCount = step.images?.length || 0;
-  const audioCount = step.audios?.length || 0;
-
-  if (imageCount === 0 && audioCount === 0) return "";
-
-  let parts = [];
-  if (imageCount > 0) parts.push(`${imageCount} image${imageCount > 1 ? 's' : ''}`);
-  if (audioCount > 0) parts.push(`${audioCount} audio${audioCount > 1 ? 's' : ''}`);
-
-  const stepIndex = store.activeTour?.step || 0;
-  const args = encodeURIComponent(JSON.stringify([stepIndex]));
-
-  return `\n\n---\n📎 [View Attachments (${parts.join(', ')})](command:codetour.viewStepMedia?${args} "Open media gallery")`;
 }
 
 /**
@@ -277,40 +255,6 @@ const VIEW_COMMANDS = new Map([
   ["terminal", "terminal.focus"]
 ]);
 
-function getPreviousTour(): CodeTour | undefined {
-  const previousTour = store.tours.find(
-    tour => tour.nextTour === store.activeTour?.tour.title
-  );
-
-  if (previousTour) {
-    return previousTour;
-  }
-
-  const match = store.activeTour?.tour.title.match(/^#?(\d+)\s+-/);
-  if (match) {
-    const previousTourNumber = Number(match[1]) - 1;
-    return store.tours.find(tour =>
-      tour.title.match(new RegExp(`^#?${previousTourNumber}\\s+[-:]`))
-    );
-  }
-}
-
-function getNextTour(): CodeTour | undefined {
-  if (store.activeTour?.tour.nextTour) {
-    return store.tours.find(
-      tour => tour.title === store.activeTour?.tour.nextTour
-    );
-  } else {
-    const tourNumber = getActiveTourNumber();
-    if (tourNumber) {
-      const nextTourNumber = tourNumber + 1;
-      return store.tours.find(tour =>
-        tour.title.match(new RegExp(`^#?${nextTourNumber}\\s+[-:]`))
-      );
-    }
-  }
-}
-
 async function renderCurrentStep() {
   if (store.activeTour!.thread) {
     store.activeTour!.thread.dispose();
@@ -352,12 +296,7 @@ async function renderCurrentStep() {
   }
 
   const range = new Range(line!, 0, line!, 0);
-  let label = `Step #${currentStep + 1} of ${currentTour!.steps.length}`;
-
-  if (currentTour.title) {
-    const title = getTourTitle(currentTour);
-    label += ` (${title})`;
-  }
+  let label = "";
 
   store.activeTour!.thread = controller!.createCommentThread(uri, range, []);
 
@@ -379,74 +318,10 @@ async function renderCurrentStep() {
     content = wrapLongCodeBlocks(baseDescription);
   }
 
-  let hasPreviousStep = currentStep > 0;
-  const hasNextStep = currentStep < currentTour.steps.length - 1;
-  const isFinalStep = currentStep === currentTour.steps.length - 1;
-
-  const showNavigation = hasPreviousStep || hasNextStep || isFinalStep;
-  if (!store.isEditing && showNavigation) {
-    content += "\n\n---\n";
-
-    if (hasPreviousStep) {
-      const stepLabel = getStepLabel(
-        currentTour,
-        currentStep - 1,
-        false,
-        false
-      );
-      const suffix = stepLabel ? ` (${stepLabel})` : "";
-      content += `← [Previous${suffix}](command:codetour.previousTourStep "Navigate to previous step")`;
-    } else {
-      const previousTour = getPreviousTour();
-      if (previousTour) {
-        hasPreviousStep = true;
-
-        const tourTitle = getTourTitle(previousTour);
-        const argsContent = encodeURIComponent(
-          JSON.stringify([previousTour.title])
-        );
-        content += `← [Previous Tour (${tourTitle})](command:codetour.startTourByTitle?${argsContent} "Navigate to previous tour")`;
-      }
-    }
-
-    const prefix = hasPreviousStep ? " | " : "";
-    if (hasNextStep) {
-      const stepLabel = getStepLabel(
-        currentTour,
-        currentStep + 1,
-        false,
-        false
-      );
-      const suffix = stepLabel ? ` (${stepLabel})` : "";
-      content += `${prefix}[Next${suffix}](command:codetour.nextTourStep "Navigate to next step") →`;
-    } else if (isFinalStep) {
-      const nextTour = getNextTour();
-      if (nextTour) {
-        const tourTitle = getTourTitle(nextTour);
-        const argsContent = encodeURIComponent(
-          JSON.stringify([nextTour.title])
-        );
-        content += `${prefix}[Next Tour (${tourTitle})](command:codetour.finishTour?${argsContent} "Start next tour")`;
-      } else {
-        content += `${prefix}[Finish Tour](command:codetour.finishTour "Finish the tour")`;
-      }
-    }
-  }
-
   // Show media galleries or simplified summary depending on step's comment mode
   if (mode === CommentMode.Editing) {
     // In edit mode, show simplified summary to avoid HTML in editable content
     content += generateEditModeAttachmentSummary(step);
-  } else {
-    // Layer 2: Use compact media link instead of inline galleries
-    // This reduces content height to help with CommentThread scroll limitations
-    content += generateCompactMediaLink(step);
-  }
-
-  // Layer 3: Add "View Full Content" link for very long steps
-  if (content.length > CONTENT_LENGTH_THRESHOLD) {
-    const args = encodeURIComponent(JSON.stringify([currentStep]));
-    content += `\n\n---\n[📖 View Full Content in Panel](command:codetour.viewFullContent?${args} "Open full content in a dedicated panel")`;
   }
 
   const comment = new CodeTourComment(
@@ -461,17 +336,17 @@ async function renderCurrentStep() {
   store.activeTour!.thread.comments = [comment];
 
   const contextValues = [];
-  if (hasPreviousStep) {
+  if (currentStep > 0) {
     contextValues.push("hasPrevious");
   }
 
-  if (hasNextStep) {
+  if (currentStep < currentTour.steps.length - 1) {
     contextValues.push("hasNext");
   }
 
   store.activeTour!.thread.contextValue = contextValues.join(".");
   store.activeTour!.thread.collapsibleState =
-    CommentThreadCollapsibleState.Expanded;
+    CommentThreadCollapsibleState.Collapsed;
 
   let selection;
   if (step.selection) {
