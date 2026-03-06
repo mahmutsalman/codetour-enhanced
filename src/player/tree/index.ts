@@ -4,12 +4,16 @@
 import { reaction } from "mobx";
 import * as vscode from "vscode";
 import {
+  DataTransfer,
+  DataTransferItem,
   Disposable,
   Event,
   EventEmitter,
   MarkdownString,
   TreeDataProvider,
+  TreeDragAndDropController,
   TreeItem,
+  Uri,
   window,
   workspace
 } from "vscode";
@@ -18,10 +22,14 @@ import { generatePreviewContent } from "..";
 import { store, CodeTour } from "../../store";
 import { CodeTourNode, CodeTourStepNode, WorkspaceFolderNode } from "./nodes";
 
-class CodeTourTreeProvider implements TreeDataProvider<TreeItem>, Disposable {
+class CodeTourTreeProvider implements TreeDataProvider<TreeItem>, TreeDragAndDropController<TreeItem>, Disposable {
   private _disposables: Disposable[] = [];
 
   private _onDidChangeTreeData = new EventEmitter<TreeItem | undefined>();
+
+  // TreeDragAndDropController
+  readonly dropMimeTypes: string[] = [];
+  readonly dragMimeTypes: string[] = ["text/uri-list", "text/plain"];
   public readonly onDidChangeTreeData: Event<TreeItem | undefined> = this
     ._onDidChangeTreeData.event;
 
@@ -261,6 +269,31 @@ class CodeTourTreeProvider implements TreeDataProvider<TreeItem>, Disposable {
     return element;
   }
 
+  handleDrag(source: readonly TreeItem[], dataTransfer: DataTransfer): void {
+    const tourIds = new Set<string>();
+    for (const item of source) {
+      if (item instanceof CodeTourNode) {
+        tourIds.add(item.tour.id);
+      } else if (item instanceof CodeTourStepNode) {
+        tourIds.add(item.tour.id);
+      }
+    }
+    if (tourIds.size === 0) return;
+
+    const uris = [...tourIds].map(id => Uri.parse(id));
+    const fsPaths = uris.map(uri => uri.fsPath);
+
+    dataTransfer.set(
+      "text/uri-list",
+      new DataTransferItem(uris.map(u => u.toString()).join("\r\n"))
+    );
+    dataTransfer.set("text/plain", new DataTransferItem(fsPaths.join("\n")));
+  }
+
+  handleDrop(): void {
+    // We don't accept drops into the tree
+  }
+
   dispose() {
     this._disposables.forEach(disposable => disposable.dispose());
   }
@@ -271,7 +304,8 @@ export function registerTreeProvider(extensionPath: string) {
   const treeView = window.createTreeView(TOURS_VIEW_ID, {
     showCollapseAll: true,
     treeDataProvider,
-    canSelectMany: true
+    canSelectMany: true,
+    dragAndDropController: treeDataProvider
   });
 
   let isRevealPending = false;

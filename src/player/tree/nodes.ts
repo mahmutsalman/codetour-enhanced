@@ -9,7 +9,7 @@ import {
   TreeItemCollapsibleState,
   Uri
 } from "vscode";
-import { CONTENT_URI, EXTENSION_NAME, FS_SCHEME } from "../../constants";
+import { EXTENSION_NAME } from "../../constants";
 import { CodeTour, store } from "../../store";
 import { progress } from "../../store/storage";
 import { getFileUri, getStepLabel, getWorkspaceUri } from "../../utils";
@@ -107,22 +107,8 @@ export class CodeTourStepNode extends TreeItem {
       arguments: [tour, stepNumber, workspaceRoot, tours]
     };
 
-    let resourceUri;
-    if (step.uri) {
-      resourceUri = Uri.parse(step.uri);
-    } else if (step.contents) {
-      resourceUri = Uri.parse(`${FS_SCHEME}://current/${step.file}`);
-    } else if (step.file || step.directory) {
-      const resourceRoot = workspaceRoot
-        ? workspaceRoot
-        : getWorkspaceUri(tour);
-
-      resourceUri = getFileUri(step.directory || step.file!, resourceRoot);
-    } else {
-      resourceUri = CONTENT_URI;
-    }
-
-    this.resourceUri = resourceUri;
+    // Set resourceUri to the .tour file so drag-to-terminal pastes the tour path
+    this.resourceUri = Uri.parse(tour.id);
 
     const isActive =
       store.activeTour &&
