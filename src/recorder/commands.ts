@@ -158,8 +158,8 @@ export function registerRecorderCommands() {
   ) {
     console.log("DEBUG: recordTourInternal called with:", { tourTitle, workspaceRoot });
     
-    // Ensure we have a valid workspace root
-    if (!workspaceRoot) {
+    // Ensure we have a valid workspace root (check scheme to catch plain objects)
+    if (!workspaceRoot || !workspaceRoot.scheme || workspaceRoot.scheme === "undefined") {
       if (!workspace.workspaceFolders || workspace.workspaceFolders.length === 0) {
         vscode.window.showErrorMessage("No workspace folder is open. Please open a folder to create a tour.");
         return;
@@ -188,7 +188,7 @@ export function registerRecorderCommands() {
     }
 
     // Validate that we now have a valid workspace root
-    if (!workspaceRoot) {
+    if (!workspaceRoot || !workspaceRoot.scheme || workspaceRoot.scheme === "undefined") {
       vscode.window.showErrorMessage("Failed to determine workspace root for tour creation.");
       return;
     }
