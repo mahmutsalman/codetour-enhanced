@@ -878,6 +878,20 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
     .text-edit-btn:hover {
       background: var(--vscode-button-secondaryHoverBackground, #45484d);
     }
+    .text-add-btn {
+      margin-top: 8px;
+      background: var(--vscode-button-background, #0e639c);
+      color: var(--vscode-button-foreground, #fff);
+      border: none;
+      padding: 5px 14px;
+      border-radius: 2px;
+      cursor: pointer;
+      font-size: 11px;
+      font-family: var(--vscode-font-family);
+    }
+    .text-add-btn:hover {
+      background: var(--vscode-button-hoverBackground, #1177bb);
+    }
     .text-editor-wrap {
       flex: 1;
       overflow-y: auto;
@@ -1051,7 +1065,10 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
 
   <!-- TEXT MODE (hidden by default) -->
   <div id="textMode" class="mode-container hidden">
-    <div id="textEmpty" class="empty" style="display:none"><p>No text content for this step.</p></div>
+    <div id="textEmpty" class="empty" style="display:none">
+      <p>No text content for this step.</p>
+      <button class="text-add-btn" id="textAddBtn">Add Text</button>
+    </div>
     <div id="textContent" class="content-panel">
       <div class="text-header">
         <span class="text-title" id="textTitle">Step Content</span>
@@ -1089,6 +1106,7 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
       var autoPlayOnReady = false;
       var textDelta = null;
       var textIsEditing = false;
+      var textAddedFromEmpty = false;
       var quillEditor = null;
 
       // ── DOM refs ──
@@ -1137,6 +1155,7 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
         textButtonBar: document.getElementById('textButtonBar'),
         textSaveBtn: document.getElementById('textSaveBtn'),
         textCancelBtn: document.getElementById('textCancelBtn'),
+        textAddBtn: document.getElementById('textAddBtn'),
         noteToggleBtn: document.getElementById('noteToggleBtn')
       };
 
@@ -1635,6 +1654,7 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
         var html = quillEditor.root.innerHTML;
         vscode.postMessage({ type: 'saveText', delta: delta, html: html });
         textIsEditing = false;
+        textAddedFromEmpty = false;
         el.textButtonBar.style.display = 'none';
         el.textEditBtn.style.display = '';
         // Switch to read-only
@@ -1647,7 +1667,26 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
         textIsEditing = false;
         el.textButtonBar.style.display = 'none';
         el.textEditBtn.style.display = '';
+        if (textAddedFromEmpty) {
+          textAddedFromEmpty = false;
+          el.textContent.classList.remove('visible');
+          el.textEmpty.style.display = 'flex';
+          if (quillEditor) { quillEditor = null; el.textEditor.innerHTML = ''; }
+          return;
+        }
         initQuill(false);
+      });
+
+      // Text add button (empty state)
+      el.textAddBtn.addEventListener('click', function() {
+        textAddedFromEmpty = true;
+        el.textEmpty.style.display = 'none';
+        el.textContent.classList.add('visible');
+        textIsEditing = true;
+        el.textEditBtn.style.display = 'none';
+        el.textButtonBar.style.display = 'flex';
+        textDelta = null;
+        initQuill(true);
       });
 
       // ── Events ──
