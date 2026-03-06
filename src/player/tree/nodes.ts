@@ -89,6 +89,40 @@ export class CodeTourNode extends TreeItem {
   }
 }
 
+export class CodeTourNotesNode extends TreeItem {
+  constructor(public tour: CodeTour) {
+    super("Tour Notes");
+
+    this.iconPath = new ThemeIcon("notebook");
+    this.contextValue = "codetour.tourNotes";
+
+    // Build description summary
+    const note = tour.parentNote;
+    if (note) {
+      const parts: string[] = [];
+      const hasText = (note.description && note.description.trim().length > 0) ||
+                      (note.richDescription && note.richDescription.html && note.richDescription.html.trim().length > 0);
+      if (hasText) parts.push("text");
+      if (note.images && note.images.length > 0) parts.push(`${note.images.length} img`);
+      if (note.audios && note.audios.length > 0) parts.push(`${note.audios.length} audio`);
+      this.description = parts.length > 0 ? parts.join(", ") : "empty";
+    } else {
+      this.description = "empty";
+    }
+
+    const isActive = store.activeTour && store.activeTour.tour.id === tour.id && store.viewingParentNote;
+    if (isActive) {
+      this.iconPath = new ThemeIcon("notebook-render-output");
+    }
+
+    this.command = {
+      command: `${EXTENSION_NAME}.viewParentNote`,
+      title: "View Tour Notes",
+      arguments: [tour]
+    };
+  }
+}
+
 export class CodeTourStepNode extends TreeItem {
   constructor(public tour: CodeTour, public stepNumber: number) {
     super(getStepLabel(tour, stepNumber));

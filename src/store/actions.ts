@@ -65,6 +65,8 @@ export function startCodeTour(
     workspaceRoot = getWorkspaceUri(tour);
   }
 
+  store.viewingParentNote = false;
+
   const step = stepNumber ? stepNumber : tour.steps.length ? 0 : -1;
   store.activeTour = {
     tour,
@@ -143,12 +145,14 @@ export async function endCurrentCodeTour(fireEvent: boolean = true) {
 }
 
 export function moveCurrentCodeTourBackward() {
+  store.viewingParentNote = false;
   --store.activeTour!.step;
 
   _onDidStartTour.fire([store.activeTour!.tour, store.activeTour!.step]);
 }
 
 export async function moveCurrentCodeTourForward() {
+  store.viewingParentNote = false;
   await progress.update();
 
   store.activeTour!.step++;

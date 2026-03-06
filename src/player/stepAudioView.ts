@@ -1,8 +1,8 @@
 import { reaction } from "mobx";
 import * as vscode from "vscode";
-import { store, CodeTourStepAudio } from "../store";
+import { store, CodeTourStepAudio, getActiveContent } from "../store";
 import { saveTour } from "../recorder/commands";
-import { removeAudioFromStep } from "../utils/audioStorage";
+import { removeAudioFromStep, removeAudioFromParentNote } from "../utils/audioStorage";
 import { ImageGalleryPanelProvider } from "./imageGalleryPanel";
 
 export class StepAudioViewProvider implements vscode.WebviewViewProvider {
@@ -58,11 +58,12 @@ export class StepAudioViewProvider implements vscode.WebviewViewProvider {
     const dispose = reaction(
       () => {
         if (!store.activeTour) return null;
-        const step = store.activeTour.tour.steps[store.activeTour.step];
+        const content = getActiveContent();
         return [
           store.activeTour.step,
-          step?.audios?.length ?? 0,
-          step?.audios?.map(a => `${a.id}:${a.caption ?? ""}`).join(","),
+          store.viewingParentNote,
+          content?.audios?.length ?? 0,
+          content?.audios?.map(a => `${a.id}:${a.caption ?? ""}`).join(","),
           store.isAudioRecording,
           store.isRecording || store.isEditing
         ];
@@ -80,9 +81,8 @@ export class StepAudioViewProvider implements vscode.WebviewViewProvider {
   }
 
   private _getAudios(): CodeTourStepAudio[] {
-    if (!store.activeTour) return [];
-    const step = store.activeTour.tour.steps[store.activeTour.step];
-    return step?.audios ?? [];
+    const content = getActiveContent();
+    return content?.audios ?? [];
   }
 
   private async _handleMessage(message: any) {
@@ -111,7 +111,11 @@ export class StepAudioViewProvider implements vscode.WebviewViewProvider {
           "Remove this audio recording?", { modal: true }, "Remove"
         );
         if (confirm !== "Remove") return;
-        await removeAudioFromStep(store.activeTour.tour, store.activeTour.step, message.audioId);
+        if (store.viewingParentNote) {
+          await removeAudioFromParentNote(store.activeTour.tour, message.audioId);
+        } else {
+          await removeAudioFromStep(store.activeTour.tour, store.activeTour.step, message.audioId);
+        }
         await saveTour(store.activeTour.tour);
         this._updateContent();
         break;
@@ -143,8 +147,10 @@ export class StepAudioViewProvider implements vscode.WebviewViewProvider {
       return this._emptyHtml(nonce, "No tour is active.");
     }
 
-    const stepNum = store.activeTour.step + 1;
-    const totalSteps = store.activeTour.tour.steps.length;
+    const isParentNote = store.viewingParentNote;
+    const headerLabel = isParentNote
+      ? "Tour Notes"
+      : `Step ${store.activeTour.step + 1} of ${store.activeTour.tour.steps.length}`;
 
     if (audios.length === 0 && !isRecording) {
       return `<!DOCTYPE html>
@@ -196,7 +202,7 @@ export class StepAudioViewProvider implements vscode.WebviewViewProvider {
   </style>
 </head>
 <body>
-  <div class="header">Step ${stepNum} of ${totalSteps} &mdash; No audio</div>
+  <div class="header">${headerLabel} &mdash; No audio</div>
   <div class="empty-zone">
     <div>No audio recordings</div>
     <div class="empty-hint">Record or add audio to this step</div>
@@ -418,7 +424,7 @@ export class StepAudioViewProvider implements vscode.WebviewViewProvider {
 </head>
 <body>
   <div class="header">
-    <span class="header-info">Step ${stepNum} &mdash; ${audios.length} audio${audios.length !== 1 ? 's' : ''}</span>
+    <span class="header-info">${headerLabel} &mdash; ${audios.length} audio${audios.length !== 1 ? 's' : ''}</span>
     <div class="header-actions">
       ${!isRecording ? `
         <button class="action-btn record-btn" data-action="record" ${!isEditMode ? 'disabled title="Enter edit mode first"' : ''}>Rec</button>

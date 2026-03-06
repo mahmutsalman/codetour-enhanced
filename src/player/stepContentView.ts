@@ -1,6 +1,6 @@
 import { reaction } from "mobx";
 import * as vscode from "vscode";
-import { store } from "../store";
+import { store, getActiveContent } from "../store";
 import { saveTour } from "../recorder/commands";
 import { markdownToDelta, deltaToMarkdown } from "../utils/markdownQuillConverter";
 
@@ -37,7 +37,7 @@ export class StepContentViewProvider implements vscode.WebviewViewProvider {
     const dispose = reaction(
       () =>
         store.activeTour
-          ? [store.activeTour.step, store.activeTour.tour.title]
+          ? [store.activeTour.step, store.activeTour.tour.title, store.viewingParentNote]
           : null,
       () => {
         if (!this._isEditing) {
@@ -70,17 +70,26 @@ export class StepContentViewProvider implements vscode.WebviewViewProvider {
       case "save": {
         if (!store.activeTour) return;
 
-        const step =
-          store.activeTour.tour.steps[store.activeTour.step];
-        if (!step) return;
+        if (store.viewingParentNote) {
+          if (!store.activeTour.tour.parentNote) {
+            store.activeTour.tour.parentNote = { description: '' };
+          }
+          store.activeTour.tour.parentNote.richDescription = {
+            delta: message.delta,
+            html: message.html
+          };
+          store.activeTour.tour.parentNote.description = deltaToMarkdown(message.delta);
+        } else {
+          const step =
+            store.activeTour.tour.steps[store.activeTour.step];
+          if (!step) return;
 
-        step.richDescription = {
-          delta: message.delta,
-          html: message.html
-        };
-
-        // Also update plain description for backward compatibility (lossy for colors)
-        step.description = deltaToMarkdown(message.delta);
+          step.richDescription = {
+            delta: message.delta,
+            html: message.html
+          };
+          step.description = deltaToMarkdown(message.delta);
+        }
 
         await saveTour(store.activeTour.tour);
 
@@ -118,16 +127,15 @@ export class StepContentViewProvider implements vscode.WebviewViewProvider {
   private _sendContentToWebview() {
     if (!this._view || !store.activeTour) return;
 
-    const step =
-      store.activeTour.tour.steps[store.activeTour.step];
-    if (!step) return;
+    const content = getActiveContent();
+    if (!content) return;
 
-    const delta = step.richDescription?.delta || markdownToDelta(step.description);
+    const delta = content.richDescription?.delta || markdownToDelta(content.description);
 
     this._view.webview.postMessage({
       type: "setContent",
       delta,
-      html: step.richDescription?.html || ""
+      html: content.richDescription?.html || ""
     });
   }
 
@@ -148,28 +156,34 @@ No tour is active. Start a tour to see step content here.
 </p></body></html>`;
     }
 
-    const step = store.activeTour.tour.steps[store.activeTour.step];
-    if (!step) {
+    const content = getActiveContent();
+    if (!content) {
       return `<!DOCTYPE html>
 <html><body><p style="color: var(--vscode-descriptionForeground); padding: 12px;">
 No step selected.
 </p></body></html>`;
     }
 
+    const isParentNote = store.viewingParentNote;
     const currentStep = store.activeTour.step;
     const totalSteps = store.activeTour.tour.steps.length;
-    const stepTitle = step.title || `Step ${currentStep + 1}`;
+    const stepTitle = isParentNote
+      ? "Tour Notes"
+      : ('title' in content && content.title) || `Step ${currentStep + 1}`;
+    const stepInfo = isParentNote
+      ? "Tour Notes"
+      : `Step ${currentStep + 1} of ${totalSteps}`;
 
     if (this._isEditing) {
-      return this._getEditHtml(webview, quillCssUri, quillJsUri, nonce, step, stepTitle, currentStep, totalSteps);
+      return this._getEditHtml(webview, quillCssUri, quillJsUri, nonce, content, stepTitle, stepInfo);
     }
 
-    const hasRichContent = !!step.richDescription;
+    const hasRichContent = !!content.richDescription;
     if (hasRichContent) {
-      return this._getRichViewHtml(webview, quillCssUri, quillJsUri, nonce, step, stepTitle, currentStep, totalSteps);
+      return this._getRichViewHtml(webview, quillCssUri, quillJsUri, nonce, content, stepTitle, stepInfo);
     }
 
-    return this._getPlainViewHtml(nonce, step, stepTitle, currentStep, totalSteps);
+    return this._getPlainViewHtml(nonce, content, stepTitle, stepInfo);
   }
 
   /** Rich view: uses Quill in read-only mode so colors render perfectly */
@@ -180,8 +194,7 @@ No step selected.
     nonce: string,
     step: any,
     stepTitle: string,
-    currentStep: number,
-    totalSteps: number
+    stepInfo: string
   ): string {
     const delta = JSON.stringify(step.richDescription.delta);
 
@@ -255,7 +268,7 @@ No step selected.
 <body>
   <div class="header">
     <div>
-      <div class="step-info">Step ${currentStep + 1} of ${totalSteps}</div>
+      <div class="step-info">${escapeHtml(stepInfo)}</div>
       <div class="step-title">${escapeHtml(stepTitle)}</div>
     </div>
     <button class="edit-btn" id="editBtn">Edit</button>
@@ -291,8 +304,7 @@ No step selected.
     nonce: string,
     step: any,
     stepTitle: string,
-    currentStep: number,
-    totalSteps: number
+    stepInfo: string
   ): string {
     return `<!DOCTYPE html>
 <html lang="en">
@@ -350,7 +362,7 @@ No step selected.
 <body>
   <div class="header">
     <div>
-      <div class="step-info">Step ${currentStep + 1} of ${totalSteps}</div>
+      <div class="step-info">${escapeHtml(stepInfo)}</div>
       <div class="step-title">${escapeHtml(stepTitle)}</div>
     </div>
     <button class="edit-btn" id="editBtn">Edit</button>
@@ -377,8 +389,7 @@ No step selected.
     nonce: string,
     step: any,
     stepTitle: string,
-    currentStep: number,
-    totalSteps: number
+    stepInfo: string
   ): string {
     const delta = step.richDescription?.delta
       ? JSON.stringify(step.richDescription.delta)
@@ -515,7 +526,7 @@ No step selected.
 </head>
 <body>
   <div class="header">
-    <div class="step-info">Editing Step ${currentStep + 1} of ${totalSteps}</div>
+    <div class="step-info">Editing ${escapeHtml(stepInfo)}</div>
     <div class="step-title">${escapeHtml(stepTitle)}</div>
   </div>
   <div class="editor-container">

@@ -7,7 +7,7 @@ import { initializeGitApi } from "./git";
 import { registerLiveShareModule } from "./liveShare";
 import { registerPlayerModule } from "./player";
 import { registerRecorderModule } from "./recorder";
-import { store } from "./store";
+import { CodeTour, store } from "./store";
 import {
   promptForTour,
   startCodeTour,
@@ -171,6 +171,19 @@ export async function activate(context: vscode.ExtensionContext) {
         stepAudioProvider,
         { webviewOptions: { retainContextWhenHidden: true } }
       )
+    );
+
+    // Register parent note commands
+    context.subscriptions.push(
+      vscode.commands.registerCommand("codetour.viewParentNote", (tour?: CodeTour) => {
+        if (tour && (!store.activeTour || store.activeTour.tour.id !== tour.id)) {
+          startCodeTour(tour);
+        }
+        store.viewingParentNote = true;
+      }),
+      vscode.commands.registerCommand("codetour.viewStepContent", () => {
+        store.viewingParentNote = false;
+      })
     );
 
     context.subscriptions.push(

@@ -103,6 +103,17 @@
     },
     "commands": [
       {
+        "command": "codetour.viewParentNote",
+        "title": "View Tour Notes",
+        "category": "CodeTour Enhanced",
+        "icon": "$(notebook)"
+      },
+      {
+        "command": "codetour.viewStepContent",
+        "title": "View Step Content",
+        "category": "CodeTour Enhanced"
+      },
+      {
         "command": "codetour.addContentStep",
         "title": "Add Tour Step",
         "category": "CodeTour Enhanced"

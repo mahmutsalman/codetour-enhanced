@@ -12,11 +12,11 @@ const THUMBNAIL_PREFIX = "thumb-";
 const THUMBNAIL_SIZE = 240; // 240px width for crisp display at 72px CSS on 2x+ HiDPI screens
 
 /**
- * Generates the image storage path for a specific tour and step
+ * Generates the image storage path for a specific tour and step (or tour-note)
  */
-export function getImageStoragePath(tourTitle: string, stepIndex: number): string {
+export function getImageStoragePath(tourTitle: string, stepIndex: number | 'tour-note'): string {
   const sanitizedTourTitle = sanitizeTourName(tourTitle);
-  const stepFolder = `step-${String(stepIndex + 1).padStart(2, '0')}`;
+  const stepFolder = stepIndex === 'tour-note' ? 'tour-note' : `step-${String(stepIndex + 1).padStart(2, '0')}`;
   return path.join(IMAGES_FOLDER, sanitizedTourTitle, stepFolder);
 }
 
@@ -52,7 +52,7 @@ export function generateImageFilename(originalName?: string): string {
 /**
  * Gets the workspace-relative path for an image
  */
-export function getImageWorkspacePath(tourTitle: string, stepIndex: number, filename: string): string {
+export function getImageWorkspacePath(tourTitle: string, stepIndex: number | 'tour-note', filename: string): string {
   const storagePath = getImageStoragePath(tourTitle, stepIndex);
   return path.join(storagePath, filename);
 }
@@ -69,7 +69,7 @@ export function getThumbnailFilename(originalFilename: string): string {
 /**
  * Creates the image storage directory if it doesn't exist
  */
-export async function ensureImageStorageDirectory(tourTitle: string, stepIndex: number): Promise<Uri> {
+export async function ensureImageStorageDirectory(tourTitle: string, stepIndex: number | 'tour-note'): Promise<Uri> {
   const workspacePathString = getActiveWorkspacePath();
   const workspacePath = Uri.file(workspacePathString);
   const storagePath = getImageStoragePath(tourTitle, stepIndex);
@@ -91,7 +91,7 @@ export async function ensureImageStorageDirectory(tourTitle: string, stepIndex: 
 export async function saveImage(
   imageData: Uint8Array,
   tourTitle: string,
-  stepIndex: number,
+  stepIndex: number | 'tour-note',
   originalFilename?: string
 ): Promise<CodeTourStepImage> {
   const filename = generateImageFilename(originalFilename);
@@ -322,15 +322,96 @@ export function updateImageCaption(
 ): boolean {
   const step = tour.steps[stepIndex];
   if (!step.images) return false;
-  
+
   const image = step.images.find(img => img.id === imageId);
   if (!image) return false;
-  
+
   if (caption) {
     image.caption = caption;
   } else {
     delete image.caption;
   }
-  
+
+  return true;
+}
+
+/**
+ * Adds an image to a tour's parent note and saves the tour
+ */
+export async function addImageToParentNote(
+  tour: CodeTour,
+  imageData: Uint8Array,
+  originalFilename?: string,
+  caption?: string
+): Promise<CodeTourStepImage> {
+  const imageMetadata = await saveImage(imageData, tour.title, 'tour-note', originalFilename);
+
+  if (caption) {
+    imageMetadata.caption = caption;
+  }
+
+  if (!tour.parentNote) {
+    tour.parentNote = { description: '' };
+  }
+  if (!tour.parentNote.images) {
+    tour.parentNote.images = [];
+  }
+  tour.parentNote.images.push(imageMetadata);
+
+  return imageMetadata;
+}
+
+/**
+ * Removes an image from a tour's parent note
+ */
+export async function removeImageFromParentNote(
+  tour: CodeTour,
+  imageId: string
+): Promise<void> {
+  if (!tour.parentNote?.images) return;
+
+  const imageIndex = tour.parentNote.images.findIndex(img => img.id === imageId);
+  if (imageIndex === -1) return;
+
+  const image = tour.parentNote.images[imageIndex];
+  const workspaceUri = workspace.getWorkspaceFolder(Uri.parse(tour.id))?.uri;
+
+  if (workspaceUri) {
+    await deleteImage(image, workspaceUri);
+  }
+
+  tour.parentNote.images.splice(imageIndex, 1);
+  if (tour.parentNote.images.length === 0) {
+    delete tour.parentNote.images;
+  }
+}
+
+/**
+ * Updates an image's color tag in parent note
+ */
+export function updateParentNoteImageColor(
+  tour: CodeTour,
+  imageId: string,
+  color?: string
+): boolean {
+  if (!tour.parentNote?.images) return false;
+  const image = tour.parentNote.images.find(img => img.id === imageId);
+  if (!image) return false;
+  if (color) { image.color = color; } else { delete image.color; }
+  return true;
+}
+
+/**
+ * Updates an image's caption in parent note
+ */
+export function updateParentNoteImageCaption(
+  tour: CodeTour,
+  imageId: string,
+  caption?: string
+): boolean {
+  if (!tour.parentNote?.images) return false;
+  const image = tour.parentNote.images.find(img => img.id === imageId);
+  if (!image) return false;
+  if (caption) { image.caption = caption; } else { delete image.caption; }
   return true;
 }

@@ -33,6 +33,16 @@ export interface CodeTourStepAudio {
   caption?: string;              // optional description
 }
 
+export interface CodeTourNote {
+  description: string;
+  richDescription?: {
+    delta: any;
+    html: string;
+  };
+  images?: CodeTourStepImage[];
+  audios?: CodeTourStepAudio[];
+}
+
 export interface CodeTourStep {
   title?: string;
   description: string;
@@ -84,6 +94,7 @@ export interface CodeTour {
   when?: string;
   createdAt?: number;
   updatedAt?: number;
+  parentNote?: CodeTourNote;
 
   // Multi-root workspace support: workspace folder this tour belongs to
   workspaceFolderUri?: string;    // URI of the workspace folder
@@ -137,6 +148,7 @@ export interface Store {
   isRecording: boolean;
   isEditing: boolean;
   isAudioRecording: boolean;
+  viewingParentNote: boolean;
   showMarkers: boolean;
   progress: CodeTourProgress[];
   tourSortMode: TourSortMode;
@@ -150,6 +162,7 @@ export const store: Store = observable({
   isRecording: false,
   isEditing: false,
   isAudioRecording: false,
+  viewingParentNote: false,
   get hasTours() {
     return this.tours.length > 0;
   },
@@ -158,3 +171,15 @@ export const store: Store = observable({
   tourSortMode: "name-asc",
   tourFilter: { isActive: false }
 });
+
+/**
+ * Returns the currently active content: either the parent note or the current step.
+ * All panels should use this to get the content to display.
+ */
+export function getActiveContent(): CodeTourNote | CodeTourStep | null {
+  if (!store.activeTour) return null;
+  if (store.viewingParentNote) {
+    return store.activeTour.tour.parentNote || { description: '' };
+  }
+  return store.activeTour.tour.steps[store.activeTour.step] || null;
+}

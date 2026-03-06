@@ -34,6 +34,18 @@ export async function saveTour(tour: CodeTour) {
     delete step.markerTitle;
   });
 
+  // Strip empty parentNote to keep JSON clean
+  if (newTour.parentNote) {
+    const pn = newTour.parentNote;
+    const hasText = pn.description && pn.description.trim().length > 0;
+    const hasRich = pn.richDescription && pn.richDescription.html && pn.richDescription.html.trim().length > 0;
+    const hasImages = pn.images && pn.images.length > 0;
+    const hasAudios = pn.audios && pn.audios.length > 0;
+    if (!hasText && !hasRich && !hasImages && !hasAudios) {
+      delete newTour.parentNote;
+    }
+  }
+
   const tourContent = JSON.stringify(newTour, null, 2);
 
   const bytes = new TextEncoder().encode(tourContent);

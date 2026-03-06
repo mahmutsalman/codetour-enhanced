@@ -12,9 +12,9 @@ const AUDIOS_FOLDER = ".tours/audio";
 /**
  * Generates the audio storage path for a specific tour and step
  */
-export function getAudioStoragePath(tourTitle: string, stepIndex: number): string {
+export function getAudioStoragePath(tourTitle: string, stepIndex: number | 'tour-note'): string {
   const sanitizedTourTitle = sanitizeTourName(tourTitle);
-  const stepFolder = `step-${String(stepIndex + 1).padStart(2, '0')}`;
+  const stepFolder = stepIndex === 'tour-note' ? 'tour-note' : `step-${String(stepIndex + 1).padStart(2, '0')}`;
   return path.join(AUDIOS_FOLDER, sanitizedTourTitle, stepFolder);
 }
 
@@ -40,7 +40,7 @@ export function generateAudioFilename(format: string = 'webm'): string {
 /**
  * Gets the workspace-relative path for an audio file
  */
-export function getAudioWorkspacePath(tourTitle: string, stepIndex: number, filename: string): string {
+export function getAudioWorkspacePath(tourTitle: string, stepIndex: number | 'tour-note', filename: string): string {
   const storagePath = getAudioStoragePath(tourTitle, stepIndex);
   return path.join(storagePath, filename);
 }
@@ -48,7 +48,7 @@ export function getAudioWorkspacePath(tourTitle: string, stepIndex: number, file
 /**
  * Creates the audio storage directory if it doesn't exist
  */
-export async function ensureAudioStorageDirectory(tourTitle: string, stepIndex: number): Promise<Uri> {
+export async function ensureAudioStorageDirectory(tourTitle: string, stepIndex: number | 'tour-note'): Promise<Uri> {
   const workspacePathString = getActiveWorkspacePath();
   const workspacePath = Uri.file(workspacePathString);
   const storagePath = getAudioStoragePath(tourTitle, stepIndex);
@@ -70,7 +70,7 @@ export async function ensureAudioStorageDirectory(tourTitle: string, stepIndex: 
 export async function saveAudioRecording(
   audioData: Uint8Array,
   tourTitle: string,
-  stepIndex: number,
+  stepIndex: number | 'tour-note',
   duration: number,
   format: string = 'webm'
 ): Promise<CodeTourStepAudio> {
@@ -154,25 +154,34 @@ export async function cleanupTourAudios(tour: CodeTour): Promise<void> {
  */
 export async function addAudioToStep(
   tour: CodeTour,
-  stepIndex: number,
+  stepIndex: number | 'tour-note',
   audioData: Uint8Array,
   duration: number,
   format: string = 'webm',
   transcript?: string
 ): Promise<CodeTourStepAudio> {
   const audioMetadata = await saveAudioRecording(audioData, tour.title, stepIndex, duration, format);
-  
+
   if (transcript) {
     audioMetadata.transcript = transcript;
   }
-  
-  // Add audio to step
-  const step = tour.steps[stepIndex];
-  if (!step.audios) {
-    step.audios = [];
+
+  if (stepIndex === 'tour-note') {
+    if (!tour.parentNote) {
+      tour.parentNote = { description: '' };
+    }
+    if (!tour.parentNote.audios) {
+      tour.parentNote.audios = [];
+    }
+    tour.parentNote.audios.push(audioMetadata);
+  } else {
+    const step = tour.steps[stepIndex];
+    if (!step.audios) {
+      step.audios = [];
+    }
+    step.audios.push(audioMetadata);
   }
-  step.audios.push(audioMetadata);
-  
+
   return audioMetadata;
 }
 
@@ -322,4 +331,44 @@ export async function convertAudiosToDataUrls(audios: CodeTourStepAudio[]): Prom
       };
     }
   }));
+}
+
+/**
+ * Removes an audio from a tour's parent note
+ */
+export async function removeAudioFromParentNote(
+  tour: CodeTour,
+  audioId: string
+): Promise<void> {
+  if (!tour.parentNote?.audios) return;
+
+  const audioIndex = tour.parentNote.audios.findIndex(a => a.id === audioId);
+  if (audioIndex === -1) return;
+
+  const audio = tour.parentNote.audios[audioIndex];
+  const workspaceUri = workspace.getWorkspaceFolder(Uri.parse(tour.id))?.uri;
+
+  if (workspaceUri) {
+    await deleteAudio(audio, workspaceUri);
+  }
+
+  tour.parentNote.audios.splice(audioIndex, 1);
+  if (tour.parentNote.audios.length === 0) {
+    delete tour.parentNote.audios;
+  }
+}
+
+/**
+ * Updates an audio's caption in parent note
+ */
+export function updateParentNoteAudioCaption(
+  tour: CodeTour,
+  audioId: string,
+  caption?: string
+): boolean {
+  if (!tour.parentNote?.audios) return false;
+  const audio = tour.parentNote.audios.find(a => a.id === audioId);
+  if (!audio) return false;
+  if (caption) { audio.caption = caption; } else { delete audio.caption; }
+  return true;
 }

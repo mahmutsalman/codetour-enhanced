@@ -164,6 +164,11 @@ async function readTourFile(
     const tour = JSON.parse(tourContent);
     tour.id = decodeURIComponent(tourUri.toString());
 
+    // Auto-create empty parentNote if missing
+    if (!tour.parentNote) {
+      tour.parentNote = { description: '' };
+    }
+
     // Attach workspace folder metadata for multi-root workspace support
     tour.workspaceFolderUri = workspaceFolder.uri.toString();
     tour.workspaceFolderName = workspaceFolder.name;

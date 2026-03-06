@@ -20,7 +20,7 @@ import {
 import { EXTENSION_NAME, TOURS_VIEW_ID } from "../../constants";
 import { generatePreviewContent } from "..";
 import { store, CodeTour } from "../../store";
-import { CodeTourNode, CodeTourStepNode, WorkspaceFolderNode } from "./nodes";
+import { CodeTourNode, CodeTourNotesNode, CodeTourStepNode, WorkspaceFolderNode } from "./nodes";
 
 class CodeTourTreeProvider implements TreeDataProvider<TreeItem>, TreeDragAndDropController<TreeItem>, Disposable {
   private _disposables: Disposable[] = [];
@@ -102,9 +102,13 @@ class CodeTourTreeProvider implements TreeDataProvider<TreeItem>, TreeDragAndDro
           tour.when,
           tour.createdAt,
           tour.updatedAt,
-          tour.workspaceFolderUri
+          tour.workspaceFolderUri,
+          tour.parentNote?.description ?? "",
+          tour.parentNote?.images?.length ?? 0,
+          tour.parentNote?.audios?.length ?? 0
         ]),
         store.isRecording,
+        store.viewingParentNote,
         store.tourSortMode,
         store.tourFilter.isActive,
         store.tourFilter.pattern,
@@ -208,6 +212,11 @@ class CodeTourTreeProvider implements TreeDataProvider<TreeItem>, TreeDragAndDro
         tour => new CodeTourNode(tour, this.extensionPath)
       );
     } else if (element instanceof CodeTourNode) {
+      const children: TreeItem[] = [];
+
+      // Always prepend Tour Notes node
+      children.push(new CodeTourNotesNode(element.tour));
+
       if (element.tour.steps.length === 0) {
         let item;
 
@@ -221,17 +230,21 @@ class CodeTourTreeProvider implements TreeDataProvider<TreeItem>, TreeDragAndDro
           item = new TreeItem("No steps recorded");
         }
 
-        return [item];
+        children.push(item);
       } else {
-        return element.tour.steps.map(
+        children.push(...element.tour.steps.map(
           (_, index) => new CodeTourStepNode(element.tour, index)
-        );
+        ));
       }
+
+      return children;
     }
   }
 
   async getParent(element: TreeItem): Promise<TreeItem | null> {
-    if (element instanceof CodeTourStepNode) {
+    if (element instanceof CodeTourNotesNode) {
+      return new CodeTourNode(element.tour, this.extensionPath);
+    } else if (element instanceof CodeTourStepNode) {
       return new CodeTourNode(element.tour, this.extensionPath);
     } else if (element instanceof CodeTourNode && this.isMultiRootWorkspace()) {
       // In multi-root workspaces, CodeTourNode's parent is the workspace folder

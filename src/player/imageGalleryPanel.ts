@@ -1,11 +1,11 @@
 import { reaction } from "mobx";
 import * as vscode from "vscode";
-import { store, CodeTourStepImage, CodeTourStepAudio } from "../store";
+import { store, CodeTourStepImage, CodeTourStepAudio, getActiveContent } from "../store";
 import { IMAGE_COLOR_PRESETS } from "../constants";
 import { saveTour } from "../recorder/commands";
-import { addImageToStep, updateImageColor, updateImageCaption } from "../utils/imageStorage";
+import { addImageToStep, updateImageColor, updateImageCaption, addImageToParentNote, updateParentNoteImageColor, updateParentNoteImageCaption } from "../utils/imageStorage";
 import { getClipboardImage } from "../utils/clipboard";
-import { convertAudiosToDataUrls, updateAudioCaption } from "../utils/audioStorage";
+import { convertAudiosToDataUrls, updateAudioCaption, updateParentNoteAudioCaption } from "../utils/audioStorage";
 import { markdownToDelta, deltaToMarkdown } from "../utils/markdownQuillConverter";
 
 export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
@@ -76,15 +76,16 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
     const dispose = reaction(
       () => {
         if (!store.activeTour) return null;
-        const step = store.activeTour.tour.steps[store.activeTour.step];
+        const content = getActiveContent();
         return [
           store.activeTour.step,
-          step?.images?.length ?? 0,
-          step?.images?.map(i => `${i.id}:${i.color ?? ""}:${i.caption ?? ""}`).join(","),
-          step?.audios?.length ?? 0,
-          step?.audios?.map(a => `${a.id}:${a.caption ?? ""}`).join(","),
-          step?.description ?? "",
-          step?.richDescription ? JSON.stringify(step.richDescription.delta) : ""
+          store.viewingParentNote,
+          content?.images?.length ?? 0,
+          content?.images?.map(i => `${i.id}:${i.color ?? ""}:${i.caption ?? ""}`).join(","),
+          content?.audios?.length ?? 0,
+          content?.audios?.map(a => `${a.id}:${a.caption ?? ""}`).join(","),
+          content?.description ?? "",
+          content?.richDescription ? JSON.stringify(content.richDescription.delta) : ""
         ];
       },
       () => this._updateContent()
@@ -127,15 +128,13 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
   }
 
   private _getImages(): CodeTourStepImage[] {
-    if (!store.activeTour) return [];
-    const step = store.activeTour.tour.steps[store.activeTour.step];
-    return step?.images ?? [];
+    const content = getActiveContent();
+    return content?.images ?? [];
   }
 
   private _getAudios(): CodeTourStepAudio[] {
-    if (!store.activeTour) return [];
-    const step = store.activeTour.tour.steps[store.activeTour.step];
-    return step?.audios ?? [];
+    const content = getActiveContent();
+    return content?.audios ?? [];
   }
 
   private async _handleMessage(message: any) {
@@ -146,6 +145,11 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
         if (this._initialized) {
           this._view?.webview.postMessage({ type: 'setMode', mode: this._mode });
         }
+        break;
+
+      case "toggleParentNote":
+        store.viewingParentNote = !store.viewingParentNote;
+        this._updateContent();
         break;
 
       // Image navigation
@@ -196,9 +200,12 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
       case "setColor": {
         if (!store.activeTour) return;
         const { imageId, color } = message;
-        updateImageColor(store.activeTour.tour, store.activeTour.step, imageId, color || undefined);
+        if (store.viewingParentNote) {
+          updateParentNoteImageColor(store.activeTour.tour, imageId, color || undefined);
+        } else {
+          updateImageColor(store.activeTour.tour, store.activeTour.step, imageId, color || undefined);
+        }
         await saveTour(store.activeTour.tour);
-        // Full update needed since color affects thumbs and main image border
         this._updateContent();
         break;
       }
@@ -206,7 +213,11 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
       case "setCaption": {
         if (!store.activeTour) return;
         const { imageId: captionImageId, caption } = message;
-        updateImageCaption(store.activeTour.tour, store.activeTour.step, captionImageId, caption || undefined);
+        if (store.viewingParentNote) {
+          updateParentNoteImageCaption(store.activeTour.tour, captionImageId, caption || undefined);
+        } else {
+          updateImageCaption(store.activeTour.tour, store.activeTour.step, captionImageId, caption || undefined);
+        }
         await saveTour(store.activeTour.tour);
         break;
       }
@@ -214,7 +225,11 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
       case "setAudioCaption": {
         if (!store.activeTour) return;
         const { audioId: captionAudioId, caption: audioCaption } = message;
-        updateAudioCaption(store.activeTour.tour, store.activeTour.step, captionAudioId, audioCaption || undefined);
+        if (store.viewingParentNote) {
+          updateParentNoteAudioCaption(store.activeTour.tour, captionAudioId, audioCaption || undefined);
+        } else {
+          updateAudioCaption(store.activeTour.tour, store.activeTour.step, captionAudioId, audioCaption || undefined);
+        }
         await saveTour(store.activeTour.tour);
         break;
       }
@@ -226,10 +241,18 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
 
       case "saveText": {
         if (!store.activeTour) return;
-        const step = store.activeTour.tour.steps[store.activeTour.step];
-        if (!step) return;
-        step.richDescription = { delta: message.delta, html: message.html };
-        step.description = deltaToMarkdown(message.delta);
+        if (store.viewingParentNote) {
+          if (!store.activeTour.tour.parentNote) {
+            store.activeTour.tour.parentNote = { description: '' };
+          }
+          store.activeTour.tour.parentNote.richDescription = { delta: message.delta, html: message.html };
+          store.activeTour.tour.parentNote.description = deltaToMarkdown(message.delta);
+        } else {
+          const step = store.activeTour.tour.steps[store.activeTour.step];
+          if (!step) return;
+          step.richDescription = { delta: message.delta, html: message.html };
+          step.description = deltaToMarkdown(message.delta);
+        }
         await saveTour(store.activeTour.tour);
         break;
       }
@@ -303,7 +326,11 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
       return;
     }
 
-    await addImageToStep(store.activeTour.tour, store.activeTour.step, imageData);
+    if (store.viewingParentNote) {
+      await addImageToParentNote(store.activeTour.tour, imageData);
+    } else {
+      await addImageToStep(store.activeTour.tour, store.activeTour.step, imageData);
+    }
     await saveTour(store.activeTour.tour);
     const images = this._getImages();
     this._currentIndex = Math.max(0, images.length - 1);
@@ -353,7 +380,8 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
       audioIndex: this._audioIndex,
       colorPresets: Object.keys(IMAGE_COLOR_PRESETS),
       autoPlay,
-      textDelta
+      textDelta,
+      isParentNote: store.viewingParentNote
     });
   }
 
@@ -383,11 +411,10 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
   }
 
   private _getTextDelta(): any | null {
-    if (!store.activeTour) return null;
-    const step = store.activeTour.tour.steps[store.activeTour.step];
-    if (!step) return null;
-    if (step.richDescription?.delta) return step.richDescription.delta;
-    if (step.description) return markdownToDelta(step.description);
+    const content = getActiveContent();
+    if (!content) return null;
+    if (content.richDescription?.delta) return content.richDescription.delta;
+    if (content.description) return markdownToDelta(content.description);
     return null;
   }
 
@@ -435,6 +462,12 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
       border-bottom: 1px solid var(--vscode-panel-border);
       flex-shrink: 0;
       background: var(--vscode-panel-background, var(--vscode-editor-background));
+      align-items: center;
+    }
+    .mode-tabs {
+      display: flex;
+      flex: 1;
+      gap: 0;
     }
     .mode-btn {
       flex: 1;
@@ -447,8 +480,8 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
       font-family: var(--vscode-font-family);
       transition: all 0.15s;
     }
-    .mode-btn:first-child { border-radius: 3px 0 0 3px; }
-    .mode-btn:last-child { border-radius: 0 3px 3px 0; }
+    .mode-tabs .mode-btn:first-child { border-radius: 3px 0 0 3px; }
+    .mode-tabs .mode-btn:last-child { border-radius: 0 3px 3px 0; }
     .mode-btn + .mode-btn { border-left: none; }
     .mode-btn.active {
       background: var(--vscode-button-secondaryBackground);
@@ -457,6 +490,29 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
     }
     .mode-btn:hover:not(.active) {
       background: var(--vscode-list-hoverBackground);
+    }
+    .note-toggle {
+      margin-left: 8px;
+      padding: 3px 8px;
+      border: 1px solid var(--vscode-panel-border);
+      border-radius: 3px;
+      background: transparent;
+      color: var(--vscode-descriptionForeground);
+      cursor: pointer;
+      font-size: 11px;
+      font-family: var(--vscode-font-family);
+      transition: all 0.15s;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .note-toggle:hover:not(.active) {
+      background: var(--vscode-list-hoverBackground);
+    }
+    .note-toggle.active {
+      background: var(--vscode-inputValidation-infoBackground, #063b49);
+      border-color: var(--vscode-inputValidation-infoBorder, #007acc);
+      color: var(--vscode-foreground);
+      font-weight: 500;
     }
     .mode-container { display: flex; flex-direction: column; flex: 1; min-height: 0; }
     .mode-container.hidden { display: none; }
@@ -907,9 +963,12 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
 </head>
 <body>
   <div class="mode-toggle">
-    <button class="mode-btn" id="modeBtnText" data-action="switchMode" data-mode="text">Text</button>
-    <button class="mode-btn active" id="modeBtnImages" data-action="switchMode" data-mode="images">Images</button>
-    <button class="mode-btn" id="modeBtnAudio" data-action="switchMode" data-mode="audio">Audio</button>
+    <div class="mode-tabs">
+      <button class="mode-btn" id="modeBtnText" data-action="switchMode" data-mode="text">Text</button>
+      <button class="mode-btn active" id="modeBtnImages" data-action="switchMode" data-mode="images">Images</button>
+      <button class="mode-btn" id="modeBtnAudio" data-action="switchMode" data-mode="audio">Audio</button>
+    </div>
+    <button class="note-toggle" id="noteToggleBtn" data-action="toggleParentNote" title="Toggle Tour Notes">&#x1F4D3; Notes</button>
   </div>
 
   <!-- IMAGE MODE (visible by default) -->
@@ -1077,7 +1136,8 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
         textEditor: document.getElementById('textEditor'),
         textButtonBar: document.getElementById('textButtonBar'),
         textSaveBtn: document.getElementById('textSaveBtn'),
-        textCancelBtn: document.getElementById('textCancelBtn')
+        textCancelBtn: document.getElementById('textCancelBtn'),
+        noteToggleBtn: document.getElementById('noteToggleBtn')
       };
 
       // ── Message handler ──
@@ -1095,6 +1155,9 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
             audioIndex = msg.audioIndex || 0;
             textDelta = msg.textDelta || null;
             setMode(msg.mode);
+            if (el.noteToggleBtn) {
+              el.noteToggleBtn.classList.toggle('active', !!msg.isParentNote);
+            }
             updateImages();
             updateAudio();
             updateText();
@@ -1622,6 +1685,9 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
                 break;
               case 'audioNavigateTo':
                 vscode.postMessage({ type: 'audioNavigateTo', index: parseInt(t.getAttribute('data-index')) });
+                break;
+              case 'toggleParentNote':
+                vscode.postMessage({ type: 'toggleParentNote' });
                 break;
             }
             return;

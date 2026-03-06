@@ -1,9 +1,9 @@
 import { reaction } from "mobx";
 import * as vscode from "vscode";
-import { store, CodeTourStepImage } from "../store";
+import { store, CodeTourStepImage, getActiveContent } from "../store";
 import { IMAGE_COLOR_PRESETS } from "../constants";
 import { saveTour } from "../recorder/commands";
-import { addImageToStep, removeImageFromStep, updateImageColor } from "../utils/imageStorage";
+import { addImageToStep, removeImageFromStep, updateImageColor, addImageToParentNote, removeImageFromParentNote, updateParentNoteImageColor } from "../utils/imageStorage";
 import { getClipboardImage } from "../utils/clipboard";
 import { ImageGalleryPanelProvider } from "./imageGalleryPanel";
 
@@ -44,11 +44,12 @@ export class StepImagesViewProvider implements vscode.WebviewViewProvider {
     const dispose = reaction(
       () => {
         if (!store.activeTour) return null;
-        const step = store.activeTour.tour.steps[store.activeTour.step];
+        const content = getActiveContent();
         return [
           store.activeTour.step,
-          step?.images?.length ?? 0,
-          step?.images?.map(i => `${i.id}:${i.color ?? ""}:${i.caption ?? ""}`).join(",")
+          store.viewingParentNote,
+          content?.images?.length ?? 0,
+          content?.images?.map(i => `${i.id}:${i.color ?? ""}:${i.caption ?? ""}`).join(",")
         ];
       },
       () => this._updateContent()
@@ -64,9 +65,8 @@ export class StepImagesViewProvider implements vscode.WebviewViewProvider {
   }
 
   private _getImages(): CodeTourStepImage[] {
-    if (!store.activeTour) return [];
-    const step = store.activeTour.tour.steps[store.activeTour.step];
-    return step?.images ?? [];
+    const content = getActiveContent();
+    return content?.images ?? [];
   }
 
   private async _handleMessage(message: any) {
@@ -85,7 +85,11 @@ export class StepImagesViewProvider implements vscode.WebviewViewProvider {
           "Remove this image?", { modal: true }, "Remove"
         );
         if (confirm !== "Remove") return;
-        await removeImageFromStep(store.activeTour.tour, store.activeTour.step, message.imageId);
+        if (store.viewingParentNote) {
+          await removeImageFromParentNote(store.activeTour.tour, message.imageId);
+        } else {
+          await removeImageFromStep(store.activeTour.tour, store.activeTour.step, message.imageId);
+        }
         await saveTour(store.activeTour.tour);
         this._updateContent();
         break;
@@ -115,7 +119,11 @@ export class StepImagesViewProvider implements vscode.WebviewViewProvider {
         const currentIdx = img.color ? colorKeys.indexOf(img.color) : -1;
         const nextIdx = currentIdx + 1;
         const nextColor = nextIdx < colorKeys.length ? colorKeys[nextIdx] : undefined;
-        updateImageColor(store.activeTour.tour, store.activeTour.step, message.imageId, nextColor);
+        if (store.viewingParentNote) {
+          updateParentNoteImageColor(store.activeTour.tour, message.imageId, nextColor);
+        } else {
+          updateImageColor(store.activeTour.tour, store.activeTour.step, message.imageId, nextColor);
+        }
         await saveTour(store.activeTour.tour);
         this._updateContent();
         break;
@@ -128,7 +136,11 @@ export class StepImagesViewProvider implements vscode.WebviewViewProvider {
 
     const clip = await getClipboardImage();
     if (clip) {
-      await addImageToStep(store.activeTour.tour, store.activeTour.step, new Uint8Array(clip.data));
+      if (store.viewingParentNote) {
+        await addImageToParentNote(store.activeTour.tour, new Uint8Array(clip.data));
+      } else {
+        await addImageToStep(store.activeTour.tour, store.activeTour.step, new Uint8Array(clip.data));
+      }
       await saveTour(store.activeTour.tour);
       this._updateContent();
       return;
@@ -172,7 +184,11 @@ export class StepImagesViewProvider implements vscode.WebviewViewProvider {
       return;
     }
 
-    await addImageToStep(store.activeTour.tour, store.activeTour.step, imageData);
+    if (store.viewingParentNote) {
+      await addImageToParentNote(store.activeTour.tour, imageData);
+    } else {
+      await addImageToStep(store.activeTour.tour, store.activeTour.step, imageData);
+    }
     await saveTour(store.activeTour.tour);
     this._updateContent();
   }
@@ -187,7 +203,11 @@ export class StepImagesViewProvider implements vscode.WebviewViewProvider {
 
     const fileData = await vscode.workspace.fs.readFile(uris[0]);
     const filename = uris[0].path.split("/").pop() || "image.png";
-    await addImageToStep(store.activeTour.tour, store.activeTour.step, fileData, filename);
+    if (store.viewingParentNote) {
+      await addImageToParentNote(store.activeTour.tour, fileData, filename);
+    } else {
+      await addImageToStep(store.activeTour.tour, store.activeTour.step, fileData, filename);
+    }
     await saveTour(store.activeTour.tour);
     this._updateContent();
   }
@@ -205,8 +225,10 @@ export class StepImagesViewProvider implements vscode.WebviewViewProvider {
       return this._emptyHtml(nonce, "No tour is active.");
     }
 
-    const stepNum = store.activeTour.step + 1;
-    const totalSteps = store.activeTour.tour.steps.length;
+    const isParentNote = store.viewingParentNote;
+    const headerLabel = isParentNote
+      ? "Tour Notes"
+      : `Step ${store.activeTour.step + 1} of ${store.activeTour.tour.steps.length}`;
 
     const colorClasses = Object.entries(IMAGE_COLOR_PRESETS).map(([name, hex]) =>
       `.thumb-wrapper.thumb-border-${name} { border-color: ${hex}; }`
@@ -258,7 +280,7 @@ export class StepImagesViewProvider implements vscode.WebviewViewProvider {
   </style>
 </head>
 <body>
-  <div class="header">Step ${stepNum} of ${totalSteps} &mdash; No images</div>
+  <div class="header">${headerLabel} &mdash; No images</div>
   <div class="paste-zone">
     <div>Paste (Cmd+V) or click to add</div>
     <div class="paste-hint">Add an image to this step</div>
@@ -424,7 +446,7 @@ export class StepImagesViewProvider implements vscode.WebviewViewProvider {
 </head>
 <body>
   <div class="header">
-    <span class="header-info">Step ${stepNum} &mdash; ${images.length} image${images.length !== 1 ? "s" : ""}</span>
+    <span class="header-info">${headerLabel} &mdash; ${images.length} image${images.length !== 1 ? "s" : ""}</span>
     <button class="add-btn" data-action="addImage" title="Add image (clipboard or file)">+</button>
   </div>
   <div class="thumb-strip">

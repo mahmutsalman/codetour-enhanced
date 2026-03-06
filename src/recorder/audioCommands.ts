@@ -31,10 +31,10 @@ export function registerAudioCommands(context?: vscode.ExtensionContext) {
 
       try {
         const tour = store.activeTour.tour;
-        const stepIndex = store.activeTour.step;
+        const stepIndex: number | 'tour-note' = store.viewingParentNote ? 'tour-note' : store.activeTour.step;
 
         const recorder = AudioRecordingManager.getInstance();
-        await recorder.openRecorder(tour, stepIndex);
+        await recorder.openRecorder(tour, stepIndex as number);
 
       } catch (error) {
         console.error("Failed to start audio recording:", error);
@@ -101,10 +101,10 @@ export function registerAudioCommands(context?: vscode.ExtensionContext) {
         // For now, use file size as a rough estimate (this is imperfect but functional)
         const estimatedDuration = Math.max(1, audioData.length / 32000); // rough estimate
 
-        // Add audio to current step
+        // Add audio to current step or parent note
         const tour = store.activeTour.tour;
-        const stepIndex = store.activeTour.step;
-        
+        const stepIndex: number | 'tour-note' = store.viewingParentNote ? 'tour-note' : store.activeTour.step;
+
         await addAudioToStep(
           tour,
           stepIndex,
