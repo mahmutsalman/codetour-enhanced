@@ -268,6 +268,10 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
         this._playingIndex = null;
         this._onPlaybackStopped?.();
         break;
+
+      case "quickRecordAudio":
+        await vscode.commands.executeCommand('codetour.quickRecordAudio');
+        break;
     }
   }
 
@@ -526,6 +530,7 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
     .empty {
       flex: 1;
       display: flex;
+      flex-direction: column;
       align-items: center;
       justify-content: center;
       padding: 16px;
@@ -892,6 +897,20 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
     .text-add-btn:hover {
       background: var(--vscode-button-hoverBackground, #1177bb);
     }
+    .audio-record-btn {
+      margin-top: 8px;
+      background: var(--vscode-button-background, #0e639c);
+      color: var(--vscode-button-foreground, #fff);
+      border: none;
+      border-radius: 3px;
+      padding: 4px 12px;
+      cursor: pointer;
+      font-size: 11px;
+      font-family: var(--vscode-font-family);
+    }
+    .audio-record-btn:hover {
+      background: var(--vscode-button-hoverBackground, #1177bb);
+    }
     .text-editor-wrap {
       flex: 1;
       overflow-y: auto;
@@ -1007,7 +1026,10 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
 
   <!-- AUDIO MODE (hidden by default) -->
   <div id="audioMode" class="mode-container hidden">
-    <div id="audioEmpty" class="empty" style="display:none"><p>No audio recordings for this step.</p></div>
+    <div id="audioEmpty" class="empty" style="display:none">
+      <p>No audio recordings for this step.</p>
+      <button class="audio-record-btn" data-action="quickRecordAudio">Record Audio</button>
+    </div>
     <div id="audioContent" class="content-panel">
       <div class="audio-controls">
         <span class="counter" id="audioCounter">0 / 0</span>
@@ -1727,6 +1749,9 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
                 break;
               case 'toggleParentNote':
                 vscode.postMessage({ type: 'toggleParentNote' });
+                break;
+              case 'quickRecordAudio':
+                vscode.postMessage({ type: 'quickRecordAudio' });
                 break;
             }
             return;
