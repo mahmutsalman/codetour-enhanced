@@ -99,6 +99,14 @@ export interface CodeTour {
   // Multi-root workspace support: workspace folder this tour belongs to
   workspaceFolderUri?: string;    // URI of the workspace folder
   workspaceFolderName?: string;   // Display name of the workspace folder
+
+  // Topic/category this tour is grouped under (optional)
+  topic?: string;
+}
+
+export interface Topic {
+  name: string;
+  workspaceFolderUri: string;
 }
 
 export interface ActiveTour {
@@ -153,6 +161,7 @@ export interface Store {
   progress: CodeTourProgress[];
   tourSortMode: TourSortMode;
   tourFilter: TourFilter;
+  topics: Topic[];
   extensionUri?: Uri;
 }
 
@@ -169,7 +178,8 @@ export const store: Store = observable({
   showMarkers: false,
   progress: [],
   tourSortMode: "name-asc",
-  tourFilter: { isActive: false }
+  tourFilter: { isActive: false },
+  topics: []
 });
 
 /**

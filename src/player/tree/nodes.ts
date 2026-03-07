@@ -123,6 +123,20 @@ export class CodeTourNotesNode extends TreeItem {
   }
 }
 
+export class TopicNode extends TreeItem {
+  constructor(
+    public readonly topicName: string,
+    public readonly tours: CodeTour[],
+    public readonly workspaceFolderUri: string
+  ) {
+    super(topicName, TreeItemCollapsibleState.Collapsed);
+    this.contextValue = "codetour.topic";
+    this.iconPath = new ThemeIcon("folder");
+    this.description = `${tours.length} tour${tours.length !== 1 ? "s" : ""}`;
+    this.tooltip = `${topicName} — ${tours.length} tour(s)`;
+  }
+}
+
 export class CodeTourStepNode extends TreeItem {
   constructor(public tour: CodeTour, public stepNumber: number) {
     super(getStepLabel(tour, stepNumber));

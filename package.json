@@ -433,6 +433,27 @@
         "title": "Focus Text Editor",
         "category": "CodeTour Enhanced",
         "icon": "$(note)"
+      },
+      {
+        "command": "codetour.createTopic",
+        "title": "New Topic",
+        "category": "CodeTour Enhanced",
+        "icon": "$(folder-opened)"
+      },
+      {
+        "command": "codetour.renameTopic",
+        "title": "Rename Topic",
+        "category": "CodeTour Enhanced"
+      },
+      {
+        "command": "codetour.deleteTopic",
+        "title": "Delete Topic",
+        "category": "CodeTour Enhanced"
+      },
+      {
+        "command": "codetour.assignTourToTopic",
+        "title": "Assign to Topic...",
+        "category": "CodeTour Enhanced"
       }
     ],
     "menus": {
@@ -612,6 +633,22 @@
         {
           "command": "codetour.focusTextEditor",
           "when": "codetour:inTour"
+        },
+        {
+          "command": "codetour.createTopic",
+          "when": "workspaceFolderCount != 0"
+        },
+        {
+          "command": "codetour.renameTopic",
+          "when": "false"
+        },
+        {
+          "command": "codetour.deleteTopic",
+          "when": "false"
+        },
+        {
+          "command": "codetour.assignTourToTopic",
+          "when": "false"
         }
       ],
       "comments/commentThread/title": [
@@ -732,6 +769,11 @@
           "command": "codetour.clearTourFilter",
           "when": "view == codetourEnhanced.tours && codetour:hasActiveFilter",
           "group": "navigation@6"
+        },
+        {
+          "command": "codetour.createTopic",
+          "when": "view == codetourEnhanced.tours",
+          "group": "navigation@7"
         }
       ],
       "view/item/context": [
@@ -864,6 +906,21 @@
           "command": "codetour.deleteTourStep",
           "when": "viewItem =~ /^codetour.tourStep/",
           "group": "manage@2"
+        },
+        {
+          "command": "codetour.renameTopic",
+          "when": "viewItem == codetour.topic",
+          "group": "change@1"
+        },
+        {
+          "command": "codetour.deleteTopic",
+          "when": "viewItem == codetour.topic",
+          "group": "change@2"
+        },
+        {
+          "command": "codetour.assignTourToTopic",
+          "when": "viewItem =~ /^codetour\\.tour/",
+          "group": "topic@1"
         }
       ],
       "explorer/context": [

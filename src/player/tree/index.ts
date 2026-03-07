@@ -19,8 +19,9 @@ import {
 } from "vscode";
 import { EXTENSION_NAME, TOURS_VIEW_ID } from "../../constants";
 import { generatePreviewContent } from "..";
-import { store, CodeTour } from "../../store";
-import { CodeTourNode, CodeTourNotesNode, CodeTourStepNode, WorkspaceFolderNode } from "./nodes";
+import { store, CodeTour, Topic } from "../../store";
+import { assignTourToTopic } from "../../store/topics";
+import { CodeTourNode, CodeTourNotesNode, CodeTourStepNode, TopicNode, WorkspaceFolderNode } from "./nodes";
 
 class CodeTourTreeProvider implements TreeDataProvider<TreeItem>, TreeDragAndDropController<TreeItem>, Disposable {
   private _disposables: Disposable[] = [];
@@ -28,14 +29,14 @@ class CodeTourTreeProvider implements TreeDataProvider<TreeItem>, TreeDragAndDro
   private _onDidChangeTreeData = new EventEmitter<TreeItem | undefined>();
 
   // TreeDragAndDropController
-  readonly dropMimeTypes: string[] = [];
+  readonly dropMimeTypes: string[] = ["text/uri-list"];
   readonly dragMimeTypes: string[] = ["text/uri-list", "text/plain"];
   public readonly onDidChangeTreeData: Event<TreeItem | undefined> = this
     ._onDidChangeTreeData.event;
 
   private sortTours(tours: CodeTour[]): CodeTour[] {
     const sorted = [...tours];
-    
+
     switch (store.tourSortMode) {
       case "name-asc":
         return sorted.sort((a, b) => a.title.localeCompare(b.title));
@@ -64,7 +65,7 @@ class CodeTourTreeProvider implements TreeDataProvider<TreeItem>, TreeDragAndDro
     }
 
     const pattern = store.tourFilter.pattern.toLowerCase();
-    return tours.filter(tour => 
+    return tours.filter(tour =>
       tour.title.toLowerCase().includes(pattern) ||
       (tour.description && tour.description.toLowerCase().includes(pattern))
     );
@@ -90,6 +91,57 @@ class CodeTourTreeProvider implements TreeDataProvider<TreeItem>, TreeDragAndDro
     return tours.filter(tour => tour.workspaceFolderUri === folderUri);
   }
 
+  /**
+   * Gets topics for a specific workspace folder from the store
+   */
+  private getTopicsForWorkspace(folderUri: string): Topic[] {
+    return store.topics.filter(t => t.workspaceFolderUri === folderUri);
+  }
+
+  /**
+   * Gets processed tours assigned to a specific topic within a workspace folder
+   */
+  private getToursForTopic(topicName: string, folderUri: string, tours: CodeTour[]): CodeTour[] {
+    return tours.filter(t => t.topic === topicName && t.workspaceFolderUri === folderUri);
+  }
+
+  /**
+   * Gets processed tours not assigned to any topic within a workspace folder
+   */
+  private getUnassignedTours(folderUri: string, tours: CodeTour[]): CodeTour[] {
+    return tours.filter(t => t.workspaceFolderUri === folderUri && !t.topic);
+  }
+
+  /**
+   * Builds the list of TopicNodes (with their tours) followed by unassigned CodeTourNodes.
+   * When a filter is active, topics with no matching tours are hidden.
+   * Empty topics are visible when no filter is active.
+   */
+  private buildTopicAndUnassignedNodes(
+    folderUri: string,
+    processedTours: CodeTour[]
+  ): TreeItem[] {
+    const topics = this.getTopicsForWorkspace(folderUri);
+    const result: TreeItem[] = [];
+
+    for (const topic of topics) {
+      const topicTours = this.getToursForTopic(topic.name, folderUri, processedTours);
+
+      // When filter is active, hide topics with no matching tours
+      if (store.tourFilter.isActive && topicTours.length === 0) {
+        continue;
+      }
+
+      result.push(new TopicNode(topic.name, topicTours, folderUri));
+    }
+
+    // Unassigned tours appear directly at this level
+    const unassigned = this.getUnassignedTours(folderUri, processedTours);
+    result.push(...unassigned.map(t => new CodeTourNode(t, this.extensionPath)));
+
+    return result;
+  }
+
   constructor(private extensionPath: string) {
     reaction(
       () => [
@@ -103,10 +155,12 @@ class CodeTourTreeProvider implements TreeDataProvider<TreeItem>, TreeDragAndDro
           tour.createdAt,
           tour.updatedAt,
           tour.workspaceFolderUri,
+          tour.topic ?? "",
           tour.parentNote?.description ?? "",
           tour.parentNote?.images?.length ?? 0,
           tour.parentNote?.audios?.length ?? 0
         ]),
+        store.topics.map(t => [t.name, t.workspaceFolderUri]),
         store.isRecording,
         store.viewingParentNote,
         store.tourSortMode,
@@ -187,7 +241,7 @@ class CodeTourTreeProvider implements TreeDataProvider<TreeItem>, TreeDragAndDro
             const folderTours = this.getToursForWorkspace(folder, processedTours);
             return new WorkspaceFolderNode(folder, folderTours);
           })
-          .filter(node => node.tours.length > 0); // Only show folders with tours
+          .filter(node => node.tours.length > 0);
 
         if (folderNodes.length > 0) {
           return folderNodes;
@@ -198,19 +252,38 @@ class CodeTourTreeProvider implements TreeDataProvider<TreeItem>, TreeDragAndDro
         );
       }
 
-      // Single workspace: flat list of tours (current behavior)
+      // Single workspace: topics + unassigned tours
+      const folderUri = workspace.workspaceFolders?.[0]?.uri.toString() ?? "";
+      if (store.topics.some(t => t.workspaceFolderUri === folderUri)) {
+        return this.buildTopicAndUnassignedNodes(folderUri, processedTours);
+      }
+
+      // No topics defined — flat list (original behavior)
       return processedTours.map(
         tour => new CodeTourNode(tour, this.extensionPath)
       );
     } else if (element instanceof WorkspaceFolderNode) {
-      // Return tours for this workspace folder
-      if (element.tours.length === 0) {
+      const folderUri = element.workspaceFolder.uri.toString();
+      const processedTours = this.processTours(element.tours);
+
+      // Check if this workspace folder has topics defined
+      if (store.topics.some(t => t.workspaceFolderUri === folderUri)) {
+        return this.buildTopicAndUnassignedNodes(folderUri, processedTours);
+      }
+
+      if (processedTours.length === 0) {
         const item = new TreeItem("No tours in this folder");
         return [item];
       }
-      return element.tours.map(
+      return processedTours.map(
         tour => new CodeTourNode(tour, this.extensionPath)
       );
+    } else if (element instanceof TopicNode) {
+      if (element.tours.length === 0) {
+        const item = new TreeItem("No tours in this topic");
+        return [item];
+      }
+      return element.tours.map(t => new CodeTourNode(t, this.extensionPath));
     } else if (element instanceof CodeTourNode) {
       const children: TreeItem[] = [];
 
@@ -246,6 +319,13 @@ class CodeTourTreeProvider implements TreeDataProvider<TreeItem>, TreeDragAndDro
       return new CodeTourNode(element.tour, this.extensionPath);
     } else if (element instanceof CodeTourStepNode) {
       return new CodeTourNode(element.tour, this.extensionPath);
+    } else if (element instanceof CodeTourNode && element.tour.topic) {
+      // Tour is inside a topic — parent is the TopicNode
+      const folderUri = element.tour.workspaceFolderUri ?? "";
+      const topicTours = store.tours.filter(
+        t => t.topic === element.tour.topic && t.workspaceFolderUri === folderUri
+      );
+      return new TopicNode(element.tour.topic, topicTours, folderUri);
     } else if (element instanceof CodeTourNode && this.isMultiRootWorkspace()) {
       // In multi-root workspaces, CodeTourNode's parent is the workspace folder
       const workspaceFolderUri = element.tour.workspaceFolderUri;
@@ -303,8 +383,27 @@ class CodeTourTreeProvider implements TreeDataProvider<TreeItem>, TreeDragAndDro
     dataTransfer.set("text/plain", new DataTransferItem(fsPaths.join("\n")));
   }
 
-  handleDrop(): void {
-    // We don't accept drops into the tree
+  async handleDrop(target: TreeItem | undefined, dataTransfer: DataTransfer): Promise<void> {
+    if (!(target instanceof TopicNode)) {
+      return;
+    }
+
+    const item = dataTransfer.get("text/uri-list");
+    if (!item) {
+      return;
+    }
+
+    const uriList = item.value as string;
+    const uriStrings = uriList.split(/\r?\n/).filter(s => s.trim());
+
+    for (const uriStr of uriStrings) {
+      const tour = store.tours.find(
+        t => t.id === uriStr || t.id === decodeURIComponent(uriStr)
+      );
+      if (tour) {
+        await assignTourToTopic(tour, target.topicName);
+      }
+    }
   }
 
   dispose() {

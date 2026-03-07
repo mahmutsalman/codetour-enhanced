@@ -18,7 +18,13 @@ import {
 } from "../store/actions";
 import { progress } from "../store/storage";
 import { readUriContents } from "../utils";
-import { CodeTourNode } from "./tree/nodes";
+import { CodeTourNode, TopicNode } from "./tree/nodes";
+import {
+  assignTourToTopic,
+  createTopic,
+  deleteTopic,
+  renameTopic
+} from "../store/topics";
 
 let terminal: vscode.Terminal | null;
 export function registerPlayerCommands() {
@@ -386,6 +392,100 @@ export function registerPlayerCommands() {
     `${EXTENSION_NAME}.viewFullContent`,
     async (stepIndex?: number) => {
       showFullContentPanel(stepIndex);
+    }
+  );
+
+  // Topic commands
+  vscode.commands.registerCommand(`${EXTENSION_NAME}.createTopic`, async () => {
+    const folders = vscode.workspace.workspaceFolders;
+    if (!folders || folders.length === 0) {
+      return;
+    }
+
+    let workspaceFolderUri: string;
+    if (folders.length === 1) {
+      workspaceFolderUri = folders[0].uri.toString();
+    } else {
+      const picked = await vscode.window.showQuickPick(
+        folders.map(f => ({ label: f.name, uri: f.uri.toString() })),
+        { placeHolder: "Select workspace folder for new topic" }
+      );
+      if (!picked) return;
+      workspaceFolderUri = picked.uri;
+    }
+
+    const name = await vscode.window.showInputBox({
+      prompt: "Enter topic name",
+      placeHolder: "e.g. Onboarding, Backend, Architecture"
+    });
+
+    if (name && name.trim()) {
+      await createTopic(name.trim(), workspaceFolderUri);
+    }
+  });
+
+  vscode.commands.registerCommand(
+    `${EXTENSION_NAME}.renameTopic`,
+    async (node: TopicNode) => {
+      const newName = await vscode.window.showInputBox({
+        prompt: "Enter new topic name",
+        value: node.topicName
+      });
+
+      if (newName && newName.trim() && newName.trim() !== node.topicName) {
+        await renameTopic(node.topicName, newName.trim(), node.workspaceFolderUri);
+      }
+    }
+  );
+
+  vscode.commands.registerCommand(
+    `${EXTENSION_NAME}.deleteTopic`,
+    async (node: TopicNode) => {
+      const confirmed = await vscode.window.showWarningMessage(
+        `Delete topic "${node.topicName}"? Tours assigned to it will become unassigned.`,
+        { modal: true },
+        "Delete"
+      );
+
+      if (confirmed === "Delete") {
+        await deleteTopic(node.topicName, node.workspaceFolderUri);
+      }
+    }
+  );
+
+  vscode.commands.registerCommand(
+    `${EXTENSION_NAME}.assignTourToTopic`,
+    async (node: CodeTourNode) => {
+      const folderUri = node.tour.workspaceFolderUri ?? "";
+      const topics = store.topics.filter(t => t.workspaceFolderUri === folderUri);
+
+      if (topics.length === 0) {
+        vscode.window.showInformationMessage(
+          'No topics defined. Use "New Topic" to create one first.'
+        );
+        return;
+      }
+
+      const items: vscode.QuickPickItem[] = [
+        ...topics.map(t => ({
+          label: t.name,
+          description: t.name === node.tour.topic ? "(current)" : undefined,
+          picked: t.name === node.tour.topic
+        })),
+        { label: "$(x) Remove from topic", description: "Unassign this tour" }
+      ];
+
+      const selected = await vscode.window.showQuickPick(items, {
+        placeHolder: `Assign "${node.tour.title}" to a topic`
+      });
+
+      if (!selected) return;
+
+      if (selected.label.startsWith("$(x)")) {
+        await assignTourToTopic(node.tour, undefined);
+      } else {
+        await assignTourToTopic(node.tour, selected.label);
+      }
     }
   );
 }

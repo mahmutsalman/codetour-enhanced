@@ -7,6 +7,7 @@ import * as os from "os";
 import * as vscode from "vscode";
 import { CodeTour, store } from ".";
 import { EXTENSION_NAME, VSCODE_DIRECTORY } from "../constants";
+import { discoverTopics } from "./topics";
 import { readUriContents, updateMarkerTitles } from "../utils";
 import { endCurrentCodeTour } from "./actions";
 
@@ -82,6 +83,8 @@ export async function discoverTours(): Promise<void> {
   vscode.commands.executeCommand("setContext", HAS_TOURS_KEY, store.hasTours);
 
   updateMarkerTitles();
+
+  await discoverTopics();
 }
 
 async function discoverMainTours(
@@ -139,13 +142,16 @@ async function readTourDirectory(
     const tours = await Promise.all(
       tourFiles.map(async ([file, type]) => {
         const fileUri = vscode.Uri.joinPath(uri, file);
-        if (type === vscode.FileType.File) {
-          return readTourFile(fileUri, workspaceFolder);
-        } else if (type === vscode.FileType.SymbolicLink) {
-          return readTourFile(fileUri, workspaceFolder);
-        } else {
+        if (type === vscode.FileType.Directory) {
           return readTourDirectory(fileUri, workspaceFolder);
+        } else if (
+          (type === vscode.FileType.File || type === vscode.FileType.SymbolicLink) &&
+          file.endsWith(".tour")
+        ) {
+          return readTourFile(fileUri, workspaceFolder);
         }
+        // Skip non-.tour files (e.g. .topics.json) to avoid mis-parsing them as tours
+        return undefined;
       })
     );
 
@@ -223,3 +229,8 @@ const watcher = vscode.workspace.createFileSystemWatcher(
 watcher.onDidChange(discoverTours);
 watcher.onDidCreate(discoverTours);
 watcher.onDidDelete(discoverTours);
+
+const topicsWatcher = vscode.workspace.createFileSystemWatcher("**/.tours/.topics.json");
+topicsWatcher.onDidChange(discoverTopics);
+topicsWatcher.onDidCreate(discoverTopics);
+topicsWatcher.onDidDelete(discoverTopics);
