@@ -323,7 +323,10 @@ export class StepImagesViewProvider implements vscode.WebviewViewProvider {
               }
             }
           }
+          // Clipboard accessible but no image (e.g. text paste) — ignore silently
+          return;
         }
+        // Clipboard inaccessible from webview; try native clipboard API
         vscode.postMessage({ type: 'paste' });
       });
     })();
@@ -514,7 +517,10 @@ export class StepImagesViewProvider implements vscode.WebviewViewProvider {
               }
             }
           }
+          // Clipboard accessible but no image (e.g. text paste) — ignore silently
+          return;
         }
+        // Clipboard inaccessible from webview; try native clipboard API
         vscode.postMessage({ type: 'paste' });
       });
     })();

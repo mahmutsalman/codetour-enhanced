@@ -420,6 +420,20 @@ export class StepAudioViewProvider implements vscode.WebviewViewProvider {
       text-overflow: ellipsis;
       white-space: nowrap;
     }
+    .audio-item.expanded .audio-caption {
+      white-space: normal;
+      overflow: visible;
+      text-overflow: clip;
+      word-break: break-word;
+    }
+    .audio-info::after {
+      content: '';
+    }
+    .audio-item.expanded .audio-info::after {
+      content: ' ▲';
+      font-size: 9px;
+      color: var(--vscode-descriptionForeground);
+    }
   </style>
 </head>
 <body>
@@ -476,9 +490,12 @@ export class StepAudioViewProvider implements vscode.WebviewViewProvider {
                 e.stopPropagation();
                 vscode.postMessage({ type: 'togglePlay', index: parseInt(el.getAttribute('data-index')) });
                 return;
-              case 'openInPlayer':
+              case 'openInPlayer': {
+                var audioItem = el.closest('.audio-item');
+                if (audioItem) audioItem.classList.toggle('expanded');
                 vscode.postMessage({ type: 'openInPlayer', index: parseInt(el.getAttribute('data-index')) });
                 break;
+              }
               case 'remove':
                 e.stopPropagation();
                 vscode.postMessage({ type: 'remove', audioId: el.getAttribute('data-audio-id') });
