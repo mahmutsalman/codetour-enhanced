@@ -300,7 +300,7 @@ export function getMimeType(format: string): string {
  */
 export async function convertAudiosToDataUrls(audios: CodeTourStepAudio[]): Promise<{
   id: string; filename: string; duration: number; format: string;
-  transcript?: string; caption?: string; dataUrl?: string;
+  transcript?: string; caption?: string; richNotes?: { delta: any; html: string }; dataUrl?: string;
 }[]> {
   const workspaceUri = workspace.workspaceFolders?.[0]?.uri;
   if (!workspaceUri) return [];
@@ -318,6 +318,7 @@ export async function convertAudiosToDataUrls(audios: CodeTourStepAudio[]): Prom
         format: audio.format,
         transcript: audio.transcript,
         caption: audio.caption,
+        richNotes: audio.richNotes,
         dataUrl: `data:${mimeType};base64,${base64}`
       };
     } catch {
@@ -327,7 +328,8 @@ export async function convertAudiosToDataUrls(audios: CodeTourStepAudio[]): Prom
         duration: audio.duration,
         format: audio.format,
         transcript: audio.transcript,
-        caption: audio.caption
+        caption: audio.caption,
+        richNotes: audio.richNotes
       };
     }
   }));
@@ -356,6 +358,54 @@ export async function removeAudioFromParentNote(
   if (tour.parentNote.audios.length === 0) {
     delete tour.parentNote.audios;
   }
+}
+
+/**
+ * Updates an audio's rich notes (Quill Delta) in a step
+ */
+export function updateAudioNotes(
+  tour: CodeTour,
+  stepIndex: number,
+  audioId: string,
+  delta: any,
+  html: string,
+  plainText: string
+): boolean {
+  const step = tour.steps[stepIndex];
+  if (!step?.audios) return false;
+  const audio = step.audios.find(a => a.id === audioId);
+  if (!audio) return false;
+  if (plainText.trim()) {
+    audio.richNotes = { delta, html };
+    audio.caption = plainText.substring(0, 100);
+  } else {
+    delete audio.richNotes;
+    delete audio.caption;
+  }
+  return true;
+}
+
+/**
+ * Updates an audio's rich notes (Quill Delta) in parent note
+ */
+export function updateParentNoteAudioNotes(
+  tour: CodeTour,
+  audioId: string,
+  delta: any,
+  html: string,
+  plainText: string
+): boolean {
+  if (!tour.parentNote?.audios) return false;
+  const audio = tour.parentNote.audios.find(a => a.id === audioId);
+  if (!audio) return false;
+  if (plainText.trim()) {
+    audio.richNotes = { delta, html };
+    audio.caption = plainText.substring(0, 100);
+  } else {
+    delete audio.richNotes;
+    delete audio.caption;
+  }
+  return true;
 }
 
 /**

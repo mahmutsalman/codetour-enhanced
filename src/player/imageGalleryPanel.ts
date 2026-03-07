@@ -5,7 +5,7 @@ import { IMAGE_COLOR_PRESETS } from "../constants";
 import { saveTour } from "../recorder/commands";
 import { addImageToStep, updateImageColor, updateImageCaption, addImageToParentNote, updateParentNoteImageColor, updateParentNoteImageCaption } from "../utils/imageStorage";
 import { getClipboardImage } from "../utils/clipboard";
-import { convertAudiosToDataUrls, updateAudioCaption, updateParentNoteAudioCaption } from "../utils/audioStorage";
+import { convertAudiosToDataUrls, updateAudioCaption, updateParentNoteAudioCaption, updateAudioNotes, updateParentNoteAudioNotes } from "../utils/audioStorage";
 import { markdownToDelta, deltaToMarkdown } from "../utils/markdownQuillConverter";
 
 export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
@@ -229,6 +229,18 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
           updateParentNoteAudioCaption(store.activeTour.tour, captionAudioId, audioCaption || undefined);
         } else {
           updateAudioCaption(store.activeTour.tour, store.activeTour.step, captionAudioId, audioCaption || undefined);
+        }
+        await saveTour(store.activeTour.tour);
+        break;
+      }
+
+      case "setAudioNotes": {
+        if (!store.activeTour) return;
+        const { audioId: notesAudioId, delta: notesDelta, html: notesHtml, plainText: notesPlainText } = message;
+        if (store.viewingParentNote) {
+          updateParentNoteAudioNotes(store.activeTour.tour, notesAudioId, notesDelta, notesHtml, notesPlainText);
+        } else {
+          updateAudioNotes(store.activeTour.tour, store.activeTour.step, notesAudioId, notesDelta, notesHtml, notesPlainText);
         }
         await saveTour(store.activeTour.tour);
         break;
@@ -665,9 +677,9 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
       overflow: hidden;
       margin-bottom: 10px;
       /* Constrain height so double-render can't double the box size */
-      max-height: 100px;
+      max-height: 70px;
     }
-    #waveform { height: 80px; overflow: hidden; }
+    #waveform { height: 52px; overflow: hidden; }
     #waveformProgress {
       position: absolute;
       top: 0; left: 0; bottom: 0;
@@ -689,7 +701,7 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
       display: flex;
       align-items: center;
       justify-content: center;
-      height: 80px;
+      height: 52px;
       color: var(--vscode-descriptionForeground);
       font-style: italic;
       font-size: 12px;
@@ -804,6 +816,46 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
       line-height: 1.5;
     }
     .transcript-label { font-weight: 600; margin-bottom: 4px; font-style: normal; }
+    /* ── Audio Notes (Quill) ── */
+    .audio-notes-wrap {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-height: 80px;
+      border: 1px solid var(--vscode-input-border);
+      border-radius: 4px;
+      overflow: hidden;
+      margin-top: 4px;
+    }
+    .audio-notes-wrap .ql-toolbar.ql-snow {
+      border: none !important;
+      border-bottom: 1px solid var(--vscode-panel-border) !important;
+      background: var(--vscode-panel-background);
+      padding: 3px 6px;
+    }
+    .audio-notes-wrap .ql-container.ql-snow {
+      border: none !important;
+      flex: 1;
+      font-family: var(--vscode-font-family, sans-serif);
+      font-size: var(--vscode-font-size, 13px);
+    }
+    .audio-notes-wrap .ql-editor {
+      color: var(--vscode-foreground);
+      padding: 6px 10px;
+      line-height: 1.5;
+      min-height: 60px;
+    }
+    .audio-notes-wrap .ql-editor.ql-blank::before {
+      color: var(--vscode-descriptionForeground);
+      font-style: italic;
+    }
+    .audio-notes-wrap .ql-snow .ql-stroke { stroke: var(--vscode-foreground) !important; }
+    .audio-notes-wrap .ql-snow .ql-fill   { fill:   var(--vscode-foreground) !important; }
+    .audio-notes-wrap .ql-snow .ql-picker-label { color: var(--vscode-foreground) !important; }
+    .audio-notes-wrap .ql-snow .ql-picker-options {
+      background: var(--vscode-dropdown-background, #252526) !important;
+      border-color: var(--vscode-panel-border) !important;
+    }
     .error-msg {
       padding: 6px 10px;
       background: var(--vscode-inputValidation-errorBackground);
@@ -1072,8 +1124,8 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
             <div class="playing-bar"></div>
           </div>
         </div>
-        <div class="caption-bar audio-caption-bar">
-          <input class="caption-input" id="audioCaptionInput" type="text" placeholder="Add a caption..." value="" data-audio-id="" />
+        <div class="audio-notes-wrap" id="audioNotesWrap">
+          <div id="audioNotesEditor"></div>
         </div>
         <div id="transcriptBox" class="transcript-box" style="display:none;">
           <div class="transcript-label">Transcript</div>
@@ -1130,6 +1182,9 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
       var textIsEditing = false;
       var textAddedFromEmpty = false;
       var quillEditor = null;
+      var audioNotesQuill = null;
+      var audioNotesDelta = null;
+      var audioNotesDebounce = null;
 
       // ── DOM refs ──
       var el = {
@@ -1165,7 +1220,8 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
         errorMessage: document.getElementById('errorMessage'),
         waveformProgress: document.getElementById('waveformProgress'),
         waveformCursor: document.getElementById('waveformCursor'),
-        audioCaptionInput: document.getElementById('audioCaptionInput'),
+        audioNotesWrap: document.getElementById('audioNotesWrap'),
+        audioNotesEditor: document.getElementById('audioNotesEditor'),
         modeBtnText: document.getElementById('modeBtnText'),
         textMode: document.getElementById('textMode'),
         textEmpty: document.getElementById('textEmpty'),
@@ -1388,8 +1444,9 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
         var cur = audios[audioIndex];
         if (cur) {
           el.titleText.textContent = cur.filename;
-          el.audioCaptionInput.value = cur.caption || '';
-          el.audioCaptionInput.setAttribute('data-audio-id', cur.id);
+          el.audioNotesWrap.dataset.audioId = cur.id;
+          audioNotesDelta = cur.richNotes ? cur.richNotes.delta : null;
+          initAudioNotesQuill();
           if (cur.transcript) {
             el.transcriptBox.style.display = 'block';
             el.transcriptText.textContent = cur.transcript;
@@ -1427,8 +1484,9 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
         var cur = audios[audioIndex];
         if (cur) {
           el.titleText.textContent = cur.filename;
-          el.audioCaptionInput.value = cur.caption || '';
-          el.audioCaptionInput.setAttribute('data-audio-id', cur.id);
+          el.audioNotesWrap.dataset.audioId = cur.id;
+          audioNotesDelta = cur.richNotes ? cur.richNotes.delta : null;
+          initAudioNotesQuill();
           if (cur.transcript) {
             el.transcriptBox.style.display = 'block';
             el.transcriptText.textContent = cur.transcript;
@@ -1496,7 +1554,7 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
             barWidth: 2,
             barRadius: 3,
             responsive: true,
-            height: 80,
+            height: 52,
             normalize: true,
             interact: true,
             hideScrollbar: false
@@ -1661,6 +1719,43 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
         }
       }
 
+      function initAudioNotesQuill() {
+        audioNotesQuill = null;
+        // Quill injects toolbar as a sibling to the editor div inside the wrap,
+        // so clearing only the editor div leaves old toolbars behind.
+        // Reset the entire container and re-acquire the editor ref.
+        el.audioNotesWrap.innerHTML = '<div id="audioNotesEditor"></div>';
+        el.audioNotesEditor = document.getElementById('audioNotesEditor');
+        if (typeof Quill === 'undefined') return;
+        audioNotesQuill = new Quill('#audioNotesEditor', {
+          theme: 'snow',
+          placeholder: 'Notes...',
+          modules: {
+            toolbar: [
+              ['bold', 'italic', 'underline'],
+              [{ 'color': [] }, { 'background': [] }],
+              ['clean']
+            ]
+          }
+        });
+        if (audioNotesDelta) {
+          try { audioNotesQuill.setContents(audioNotesDelta); } catch(e) {}
+        }
+        audioNotesQuill.on('text-change', function(delta, oldDelta, source) {
+          if (source !== 'user') return; // ignore programmatic setContents calls
+          clearTimeout(audioNotesDebounce);
+          audioNotesDebounce = setTimeout(function() {
+            if (!audioNotesQuill) return;
+            var audioId = el.audioNotesWrap.dataset.audioId;
+            if (!audioId) return;
+            var d = audioNotesQuill.getContents();
+            var html = audioNotesQuill.root.innerHTML;
+            var plainText = audioNotesQuill.getText().trim();
+            vscode.postMessage({ type: 'setAudioNotes', audioId: audioId, delta: d, html: html, plainText: plainText });
+          }, 800);
+        });
+      }
+
       // Text edit button
       el.textEditBtn.addEventListener('click', function() {
         textIsEditing = true;
@@ -1773,19 +1868,6 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
         }, 500);
       });
 
-      // Audio caption input debounce
-      var audioCaptionTimer;
-      el.audioCaptionInput.addEventListener('input', function() {
-        clearTimeout(audioCaptionTimer);
-        audioCaptionTimer = setTimeout(function() {
-          vscode.postMessage({
-            type: 'setAudioCaption',
-            audioId: el.audioCaptionInput.getAttribute('data-audio-id'),
-            caption: el.audioCaptionInput.value
-          });
-        }, 500);
-      });
-
       // Audio playback controls
       el.playPauseBtn.addEventListener('click', function() {
         if (wavesurfer) wavesurfer.playPause();
@@ -1843,7 +1925,8 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
 
       // ── Keyboard shortcuts ──
       document.addEventListener('keydown', function(e) {
-        if (e.target === el.captionInput || e.target === el.audioCaptionInput || e.target.tagName === 'SELECT') return;
+        if (e.target === el.captionInput || e.target.tagName === 'SELECT') return;
+        if (e.target.closest && e.target.closest('.audio-notes-wrap')) return;
         // Let Quill handle its own keyboard events in text mode
         if (currentMode === 'text') return;
         if (currentMode === 'images') {

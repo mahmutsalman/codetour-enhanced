@@ -31,6 +31,7 @@ export interface CodeTourStepAudio {
   created: number;               // timestamp
   transcript?: string;           // optional transcription
   caption?: string;              // optional description
+  richNotes?: { delta: any; html: string };  // rich text notes (Quill Delta)
 }
 
 export interface CodeTourNote {
