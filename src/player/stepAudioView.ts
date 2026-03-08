@@ -65,6 +65,7 @@ export class StepAudioViewProvider implements vscode.WebviewViewProvider {
           content?.audios?.length ?? 0,
           content?.audios?.map(a => `${a.id}:${a.caption ?? ""}`).join(","),
           store.isAudioRecording,
+          store.isAudioRecordingPaused,
           store.isRecording || store.isEditing
         ];
       },
@@ -105,6 +106,16 @@ export class StepAudioViewProvider implements vscode.WebviewViewProvider {
         break;
       }
 
+      case "pauseRecording": {
+        vscode.commands.executeCommand("codetour.pauseAudioRecording");
+        break;
+      }
+
+      case "resumeRecording": {
+        vscode.commands.executeCommand("codetour.resumeAudioRecording");
+        break;
+      }
+
       case "remove": {
         if (!store.activeTour) return;
         const confirm = await vscode.window.showWarningMessage(
@@ -142,6 +153,7 @@ export class StepAudioViewProvider implements vscode.WebviewViewProvider {
     const audios = this._getAudios();
     const isEditMode = store.isRecording || store.isEditing;
     const isRecording = store.isAudioRecording;
+    const isPaused = store.isAudioRecordingPaused;
 
     if (!store.activeTour) {
       return this._emptyHtml(nonce, "No tour is active.");
@@ -254,9 +266,13 @@ export class StepAudioViewProvider implements vscode.WebviewViewProvider {
     }).join("");
 
     const recordingIndicator = isRecording ? `
-      <div class="recording-indicator">
+      <div class="recording-indicator ${isPaused ? 'paused' : ''}">
         <span class="rec-dot"></span>
-        <span>Recording...</span>
+        <span>${isPaused ? 'Paused' : 'Recording...'}</span>
+        ${isPaused
+          ? `<button class="action-btn resume-btn" data-action="resumeRecording">Resume</button>`
+          : `<button class="action-btn pause-btn" data-action="pauseRecording">Pause</button>`
+        }
         <button class="action-btn stop-btn" data-action="stopRecording">Stop</button>
       </div>` : '';
 
@@ -332,6 +348,23 @@ export class StepAudioViewProvider implements vscode.WebviewViewProvider {
     @keyframes pulse {
       0%, 100% { opacity: 1; }
       50% { opacity: 0.3; }
+    }
+    .recording-indicator.paused {
+      background: var(--vscode-editor-inactiveSelectionBackground);
+      border-color: var(--vscode-panel-border);
+      color: var(--vscode-foreground);
+    }
+    .recording-indicator.paused .rec-dot {
+      animation: none;
+      opacity: 0.4;
+    }
+    .action-btn.pause-btn {
+      background: var(--vscode-button-secondaryBackground);
+      color: var(--vscode-button-secondaryForeground);
+    }
+    .action-btn.resume-btn {
+      background: var(--vscode-button-background);
+      color: var(--vscode-button-foreground);
     }
     .audio-list {
       display: flex;
@@ -505,6 +538,12 @@ export class StepAudioViewProvider implements vscode.WebviewViewProvider {
                 break;
               case 'stopRecording':
                 vscode.postMessage({ type: 'stopRecording' });
+                break;
+              case 'pauseRecording':
+                vscode.postMessage({ type: 'pauseRecording' });
+                break;
+              case 'resumeRecording':
+                vscode.postMessage({ type: 'resumeRecording' });
                 break;
               case 'addFromFile':
                 vscode.postMessage({ type: 'addFromFile' });

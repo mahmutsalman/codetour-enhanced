@@ -60,6 +60,26 @@ export function registerAudioCommands(context?: vscode.ExtensionContext) {
   );
 
   /**
+   * Command: Pause audio recording
+   */
+  vscode.commands.registerCommand(
+    `${EXTENSION_NAME}.pauseAudioRecording`,
+    () => {
+      AudioRecordingManager.getInstance().pauseRecording();
+    }
+  );
+
+  /**
+   * Command: Resume audio recording
+   */
+  vscode.commands.registerCommand(
+    `${EXTENSION_NAME}.resumeAudioRecording`,
+    () => {
+      AudioRecordingManager.getInstance().resumeRecording();
+    }
+  );
+
+  /**
    * Command: Add audio from file to current step
    */
   vscode.commands.registerCommand(

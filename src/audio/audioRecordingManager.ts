@@ -31,6 +31,9 @@ export class AudioRecordingManager {
   private selectedDeviceIndex: number = -1;
   private recordingTimer: NodeJS.Timeout | null = null;
   private soxPath: string | null = null;
+  private isPaused: boolean = false;
+  private pausedAt: number = 0;
+  private totalPausedMs: number = 0;
 
   public static getInstance(): AudioRecordingManager {
     if (!AudioRecordingManager.instance) {
@@ -624,6 +627,39 @@ export class AudioRecordingManager {
   }
 
   /**
+   * Pauses the current recording using SIGSTOP
+   */
+  public pauseRecording(): void {
+    if (!this.recordingProcess || this.isPaused) return;
+    if (process.platform === 'win32') {
+      vscode.window.showInformationMessage('Pause is not supported on Windows.');
+      return;
+    }
+    this.recordingProcess.process.kill('SIGSTOP');
+    this.isPaused = true;
+    this.pausedAt = Date.now();
+    this.stopRecordingTimer();
+    store.isAudioRecordingPaused = true;
+    const elapsed = this.pausedAt - this.recordingProcess.startTime - this.totalPausedMs;
+    const mins = Math.floor(elapsed / 60000);
+    const secs = Math.floor((elapsed % 60000) / 1000);
+    const timeStr = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+    this.updateStatusBar(`⏸ Recording paused - ${timeStr} - Click to STOP`, false);
+  }
+
+  /**
+   * Resumes a paused recording using SIGCONT
+   */
+  public resumeRecording(): void {
+    if (!this.recordingProcess || !this.isPaused) return;
+    this.recordingProcess.process.kill('SIGCONT');
+    this.totalPausedMs += Date.now() - this.pausedAt;
+    this.isPaused = false;
+    store.isAudioRecordingPaused = false;
+    this.startRecordingTimer(!!this.soxPath);
+  }
+
+  /**
    * Stops the current recording
    */
   public async stopRecording(): Promise<void> {
@@ -631,7 +667,15 @@ export class AudioRecordingManager {
       return;
     }
 
-    const duration = (Date.now() - this.recordingProcess.startTime) / 1000;
+    // If paused, resume first so Sox can flush/finalise the WAV header
+    if (this.isPaused) {
+      this.recordingProcess.process.kill('SIGCONT');
+    }
+
+    const pausedOffset = this.isPaused
+      ? this.totalPausedMs + (Date.now() - this.pausedAt)
+      : this.totalPausedMs;
+    const duration = (Date.now() - this.recordingProcess.startTime - pausedOffset) / 1000;
 
     // Stop the recording process
     this.recordingProcess.process.kill('SIGTERM');
@@ -764,8 +808,6 @@ export class AudioRecordingManager {
       title: `🎤 Recording started with ${recordingTool}`,
       cancellable: true
     }, async (progress, token) => {
-      let timeElapsed = 0;
-
       // Initial progress message
       progress.report({
         message: `Recording in progress... 00:00 | Click status bar or Cancel to stop`
@@ -778,9 +820,14 @@ export class AudioRecordingManager {
           return;
         }
 
-        timeElapsed += 5;
-        const minutes = Math.floor(timeElapsed / 60);
-        const seconds = timeElapsed % 60;
+        if (this.isPaused) {
+          progress.report({ message: `⏸ Paused | Click status bar or Cancel to stop` });
+          return;
+        }
+
+        const elapsed = Date.now() - this.recordingProcess.startTime - this.totalPausedMs;
+        const minutes = Math.floor(elapsed / 60000);
+        const seconds = Math.floor((elapsed % 60000) / 1000);
         const timeStr = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
 
         progress.report({
@@ -827,7 +874,7 @@ export class AudioRecordingManager {
         return;
       }
 
-      const elapsed = Date.now() - this.recordingProcess.startTime;
+      const elapsed = Date.now() - this.recordingProcess.startTime - this.totalPausedMs;
       const minutes = Math.floor(elapsed / 60000);
       const seconds = Math.floor((elapsed % 60000) / 1000);
       const timeStr = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
@@ -879,6 +926,10 @@ export class AudioRecordingManager {
     }
 
     store.isAudioRecording = false;
+    store.isAudioRecordingPaused = false;
+    this.isPaused = false;
+    this.pausedAt = 0;
+    this.totalPausedMs = 0;
 
     if (this.statusBarItem) {
       this.statusBarItem.hide();
