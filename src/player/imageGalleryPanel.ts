@@ -1372,7 +1372,9 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
           el.mainImg.alt = img.filename;
           // Remove old border classes, add new
           el.mainImg.className = 'main-img' + (img.color ? ' img-border-' + img.color : '');
-          el.captionInput.value = img.caption || '';
+          if (document.activeElement !== el.captionInput) {
+            el.captionInput.value = img.caption || '';
+          }
           el.captionInput.setAttribute('data-image-id', img.id);
           // Reset zoom on image change
           zoom = 1; panX = 0; panY = 0;
