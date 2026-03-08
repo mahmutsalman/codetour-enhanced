@@ -116,6 +116,11 @@ export class StepAudioViewProvider implements vscode.WebviewViewProvider {
         break;
       }
 
+      case "addMarker": {
+        vscode.commands.executeCommand("codetour.addAudioMarker", message.markerType);
+        break;
+      }
+
       case "remove": {
         if (!store.activeTour) return;
         const confirm = await vscode.window.showWarningMessage(
@@ -273,6 +278,8 @@ export class StepAudioViewProvider implements vscode.WebviewViewProvider {
           ? `<button class="action-btn resume-btn" data-action="resumeRecording">Resume</button>`
           : `<button class="action-btn pause-btn" data-action="pauseRecording">Pause</button>`
         }
+        <button class="action-btn marker-btn important-btn" data-action="addMarker" data-type="important" ${isPaused ? 'disabled' : ''} title="Mark important moment">⭐</button>
+        <button class="action-btn marker-btn question-btn" data-action="addMarker" data-type="question" ${isPaused ? 'disabled' : ''} title="Mark question">❓</button>
         <button class="action-btn stop-btn" data-action="stopRecording">Stop</button>
       </div>` : '';
 
@@ -366,6 +373,16 @@ export class StepAudioViewProvider implements vscode.WebviewViewProvider {
       background: var(--vscode-button-background);
       color: var(--vscode-button-foreground);
     }
+    .action-btn.marker-btn {
+      background: transparent;
+      color: var(--vscode-foreground);
+      border: 1px solid var(--vscode-panel-border);
+      opacity: 0.85;
+      font-size: 10px;
+      padding: 2px 6px;
+    }
+    .action-btn.marker-btn:hover { opacity: 1; background: var(--vscode-list-hoverBackground); }
+    .action-btn.marker-btn:disabled { opacity: 0.35; cursor: not-allowed; }
     .audio-list {
       display: flex;
       flex-direction: column;
@@ -547,6 +564,9 @@ export class StepAudioViewProvider implements vscode.WebviewViewProvider {
                 break;
               case 'addFromFile':
                 vscode.postMessage({ type: 'addFromFile' });
+                break;
+              case 'addMarker':
+                vscode.postMessage({ type: 'addMarker', markerType: el.getAttribute('data-type') });
                 break;
             }
             return;

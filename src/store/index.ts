@@ -21,6 +21,13 @@ export interface CodeTourStepImage {
   created: number;              // timestamp
 }
 
+export interface AudioMarker {
+  id: string;                    // unique identifier
+  type: 'important' | 'question';
+  timestamp: number;             // seconds into the recording
+  label?: string;                // optional custom label
+}
+
 export interface CodeTourStepAudio {
   id: string;                    // unique identifier
   filename: string;              // original filename
@@ -32,6 +39,7 @@ export interface CodeTourStepAudio {
   transcript?: string;           // optional transcription
   caption?: string;              // optional description
   richNotes?: { delta: any; html: string };  // rich text notes (Quill Delta)
+  markers?: AudioMarker[];       // timestamp markers added during recording
 }
 
 export interface CodeTourNote {

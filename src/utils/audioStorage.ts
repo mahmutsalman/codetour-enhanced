@@ -300,7 +300,8 @@ export function getMimeType(format: string): string {
  */
 export async function convertAudiosToDataUrls(audios: CodeTourStepAudio[]): Promise<{
   id: string; filename: string; duration: number; format: string;
-  transcript?: string; caption?: string; richNotes?: { delta: any; html: string }; dataUrl?: string;
+  transcript?: string; caption?: string; richNotes?: { delta: any; html: string };
+  markers?: import('../store').AudioMarker[]; dataUrl?: string;
 }[]> {
   const workspaceUri = workspace.workspaceFolders?.[0]?.uri;
   if (!workspaceUri) return [];
@@ -319,6 +320,7 @@ export async function convertAudiosToDataUrls(audios: CodeTourStepAudio[]): Prom
         transcript: audio.transcript,
         caption: audio.caption,
         richNotes: audio.richNotes,
+        markers: audio.markers,
         dataUrl: `data:${mimeType};base64,${base64}`
       };
     } catch {
@@ -329,7 +331,8 @@ export async function convertAudiosToDataUrls(audios: CodeTourStepAudio[]): Prom
         format: audio.format,
         transcript: audio.transcript,
         caption: audio.caption,
-        richNotes: audio.richNotes
+        richNotes: audio.richNotes,
+        markers: audio.markers
       };
     }
   }));

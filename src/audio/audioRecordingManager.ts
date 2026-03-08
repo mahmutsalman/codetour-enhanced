@@ -6,7 +6,7 @@ import * as fs from "fs";
 import * as path from "path";
 import * as vscode from "vscode";
 import { saveTour } from "../recorder/commands";
-import { CodeTour, store } from "../store";
+import { AudioMarker, CodeTour, store } from "../store";
 import { addAudioToStep } from "../utils/audioStorage";
 
 interface RecordingProcess {
@@ -34,6 +34,7 @@ export class AudioRecordingManager {
   private isPaused: boolean = false;
   private pausedAt: number = 0;
   private totalPausedMs: number = 0;
+  private pendingMarkers: AudioMarker[] = [];
 
   public static getInstance(): AudioRecordingManager {
     if (!AudioRecordingManager.instance) {
@@ -660,6 +661,17 @@ export class AudioRecordingManager {
   }
 
   /**
+   * Adds a timestamp marker to the current recording
+   */
+  public addMarker(type: 'important' | 'question'): AudioMarker | null {
+    if (!this.recordingProcess || this.isPaused) return null;
+    const timestamp = (Date.now() - this.recordingProcess.startTime - this.totalPausedMs) / 1000;
+    const marker: AudioMarker = { id: `${Date.now()}`, type, timestamp };
+    this.pendingMarkers.push(marker);
+    return marker;
+  }
+
+  /**
    * Stops the current recording
    */
   public async stopRecording(): Promise<void> {
@@ -718,6 +730,16 @@ export class AudioRecordingManager {
         duration,
         'wav'
       );
+
+      // Attach any markers by accessing through the array (MobX wraps pushed objects,
+      // so the returned reference from addAudioToStep is the original plain object,
+      // not the observable version stored in the array — we must set via the array).
+      if (this.pendingMarkers.length > 0) {
+        const step = this.currentTour!.steps[this.currentStepIndex];
+        if (step.audios && step.audios.length > 0) {
+          step.audios[step.audios.length - 1].markers = [...this.pendingMarkers];
+        }
+      }
 
       // Save tour
       await saveTour(this.currentTour!);
@@ -930,6 +952,7 @@ export class AudioRecordingManager {
     this.isPaused = false;
     this.pausedAt = 0;
     this.totalPausedMs = 0;
+    this.pendingMarkers = [];
 
     if (this.statusBarItem) {
       this.statusBarItem.hide();

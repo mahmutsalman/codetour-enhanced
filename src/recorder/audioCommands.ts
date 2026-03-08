@@ -80,6 +80,26 @@ export function registerAudioCommands(context?: vscode.ExtensionContext) {
   );
 
   /**
+   * Command: Add a timestamp marker to the current recording
+   */
+  vscode.commands.registerCommand(
+    `${EXTENSION_NAME}.addAudioMarker`,
+    (markerType: 'important' | 'question') => {
+      const recorder = AudioRecordingManager.getInstance();
+      const marker = recorder.addMarker(markerType);
+      if (marker) {
+        const mins = Math.floor(marker.timestamp / 60);
+        const secs = Math.floor(marker.timestamp % 60);
+        const timeStr = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+        const icon = markerType === 'important' ? '⭐' : '❓';
+        vscode.window.showInformationMessage(`${icon} Marker added at ${timeStr}`);
+      } else {
+        vscode.window.showWarningMessage('Could not add marker — no active recording or recording is paused.');
+      }
+    }
+  );
+
+  /**
    * Command: Add audio from file to current step
    */
   vscode.commands.registerCommand(

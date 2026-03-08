@@ -816,6 +816,45 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
       line-height: 1.5;
     }
     .transcript-label { font-weight: 600; margin-bottom: 4px; font-style: normal; }
+    /* ── Markers Panel ── */
+    .markers-panel {
+      margin-top: 6px;
+      font-size: 11px;
+    }
+    .markers-label {
+      font-weight: 600;
+      color: var(--vscode-descriptionForeground);
+      margin-bottom: 4px;
+    }
+    .markers-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      overflow-x: auto;
+    }
+    .marker-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-size: 10px;
+      cursor: pointer;
+      border: 1px solid transparent;
+      white-space: nowrap;
+      transition: opacity 0.15s;
+    }
+    .marker-chip:hover { opacity: 0.8; }
+    .marker-chip.important {
+      background: rgba(255, 193, 7, 0.2);
+      border-color: rgba(255, 193, 7, 0.5);
+      color: var(--vscode-foreground);
+    }
+    .marker-chip.question {
+      background: rgba(54, 162, 235, 0.2);
+      border-color: rgba(54, 162, 235, 0.5);
+      color: var(--vscode-foreground);
+    }
     /* ── Audio Notes (Quill) ── */
     .audio-notes-wrap {
       flex: 1;
@@ -1124,6 +1163,7 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
             <div class="playing-bar"></div>
           </div>
         </div>
+        <div id="markersPanel" class="markers-panel" style="display:none;"></div>
         <div class="audio-notes-wrap" id="audioNotesWrap">
           <div id="audioNotesEditor"></div>
         </div>
@@ -1217,6 +1257,7 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
         playingIndicator: document.getElementById('playingIndicator'),
         transcriptBox: document.getElementById('transcriptBox'),
         transcriptText: document.getElementById('transcriptText'),
+        markersPanel: document.getElementById('markersPanel'),
         errorMessage: document.getElementById('errorMessage'),
         waveformProgress: document.getElementById('waveformProgress'),
         waveformCursor: document.getElementById('waveformCursor'),
@@ -1456,6 +1497,8 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
             el.transcriptBox.style.display = 'none';
           }
 
+          renderMarkers(cur.markers);
+
           var src = cur.dataUrl;
           if (src && src !== currentAudioSrc) {
             currentAudioSrc = src;
@@ -1497,6 +1540,8 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
           } else {
             el.transcriptBox.style.display = 'none';
           }
+
+          renderMarkers(cur.markers);
 
           var src = cur.dataUrl;
           if (src && src !== currentAudioSrc) {
@@ -1658,6 +1703,22 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
         var m = Math.floor(s / 60);
         var sec = Math.floor(s % 60);
         return m + ':' + (sec < 10 ? '0' : '') + sec;
+      }
+
+      function renderMarkers(markers) {
+        if (!markers || markers.length === 0) {
+          el.markersPanel.style.display = 'none';
+          return;
+        }
+        el.markersPanel.style.display = 'block';
+        var sorted = markers.slice().sort(function(a, b) { return a.timestamp - b.timestamp; });
+        var chips = sorted.map(function(m) {
+          var icon = m.type === 'important' ? '⭐' : '❓';
+          var cls = 'marker-chip ' + m.type;
+          return '<span class="' + cls + '" data-action="seekToMarker" data-time="' + m.timestamp + '">'
+            + icon + ' ' + fmtTime(m.timestamp) + '</span>';
+        }).join('');
+        el.markersPanel.innerHTML = '<div class="markers-label">Markers</div><div class="markers-chips">' + chips + '</div>';
       }
 
       // ── Text functions ──
@@ -1852,6 +1913,17 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
               case 'quickRecordAudio':
                 vscode.postMessage({ type: 'quickRecordAudio' });
                 break;
+              case 'seekToMarker': {
+                var seekTime = parseFloat(t.getAttribute('data-time'));
+                if (wavesurfer && wsReady) {
+                  var dur = wavesurfer.getDuration();
+                  if (dur > 0) {
+                    wavesurfer.seekTo(seekTime / dur);
+                    safePlay();
+                  }
+                }
+                break;
+              }
             }
             return;
           }
