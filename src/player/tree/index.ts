@@ -364,23 +364,30 @@ class CodeTourTreeProvider implements TreeDataProvider<TreeItem>, TreeDragAndDro
 
   handleDrag(source: readonly TreeItem[], dataTransfer: DataTransfer): void {
     const tourIds = new Set<string>();
+    const stepTexts: string[] = [];
+
     for (const item of source) {
       if (item instanceof CodeTourNode) {
         tourIds.add(item.tour.id);
       } else if (item instanceof CodeTourStepNode) {
-        tourIds.add(item.tour.id);
+        const tourUri = Uri.parse(item.tour.id);
+        const stepNumber = item.stepNumber + 1; // 1-based
+        stepTexts.push(`${tourUri.fsPath}:${stepNumber}`);
       }
     }
-    if (tourIds.size === 0) return;
 
-    const uris = [...tourIds].map(id => Uri.parse(id));
-    const fsPaths = uris.map(uri => uri.fsPath);
-
-    dataTransfer.set(
-      "text/uri-list",
-      new DataTransferItem(uris.map(u => u.toString()).join("\r\n"))
-    );
-    dataTransfer.set("text/plain", new DataTransferItem(fsPaths.join("\n")));
+    if (stepTexts.length > 0) {
+      dataTransfer.set("text/plain", new DataTransferItem(stepTexts.join("\n")));
+    } else {
+      if (tourIds.size === 0) return;
+      const uris = [...tourIds].map(id => Uri.parse(id));
+      const fsPaths = uris.map(uri => uri.fsPath);
+      dataTransfer.set(
+        "text/uri-list",
+        new DataTransferItem(uris.map(u => u.toString()).join("\r\n"))
+      );
+      dataTransfer.set("text/plain", new DataTransferItem(fsPaths.join("\n")));
+    }
   }
 
   async handleDrop(target: TreeItem | undefined, dataTransfer: DataTransfer): Promise<void> {
