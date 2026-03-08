@@ -1444,9 +1444,11 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
         var cur = audios[audioIndex];
         if (cur) {
           el.titleText.textContent = cur.filename;
-          el.audioNotesWrap.dataset.audioId = cur.id;
           audioNotesDelta = cur.richNotes ? cur.richNotes.delta : null;
-          initAudioNotesQuill();
+          if (el.audioNotesWrap.dataset.audioId !== cur.id || !audioNotesQuill) {
+            el.audioNotesWrap.dataset.audioId = cur.id;
+            initAudioNotesQuill();
+          }
           if (cur.transcript) {
             el.transcriptBox.style.display = 'block';
             el.transcriptText.textContent = cur.transcript;
@@ -1484,9 +1486,11 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
         var cur = audios[audioIndex];
         if (cur) {
           el.titleText.textContent = cur.filename;
-          el.audioNotesWrap.dataset.audioId = cur.id;
           audioNotesDelta = cur.richNotes ? cur.richNotes.delta : null;
-          initAudioNotesQuill();
+          if (el.audioNotesWrap.dataset.audioId !== cur.id || !audioNotesQuill) {
+            el.audioNotesWrap.dataset.audioId = cur.id;
+            initAudioNotesQuill();
+          }
           if (cur.transcript) {
             el.transcriptBox.style.display = 'block';
             el.transcriptText.textContent = cur.transcript;
