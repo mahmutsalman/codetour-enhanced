@@ -363,7 +363,10 @@ export class AudioPlayerManager {
             });
             
             wavesurfer.on('loading', (percent) => {
-                elements.waveformLoading.textContent = \`Loading waveform... \${percent}%\`;
+                const safePercent = Number.isFinite(percent) ? Math.round(percent) : 0;
+                elements.waveformLoading.textContent = safePercent > 0
+                    ? \`Loading waveform... \${safePercent}%\`
+                    : 'Loading waveform...';
                 elements.waveformLoading.style.display = 'flex';
             });
             
@@ -566,6 +569,7 @@ export class AudioPlayerManager {
         }
         
         function formatDuration(seconds) {
+            if (!seconds || !isFinite(seconds)) return '--:--';
             return formatTime(seconds);
         }
         

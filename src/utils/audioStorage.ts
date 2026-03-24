@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 
 import * as path from "path";
+import { spawn } from "child_process";
 import { Uri, workspace } from "vscode";
 import { CodeTour, CodeTourStepAudio } from "../store";
 import { getActiveWorkspacePath } from "../utils";
@@ -274,9 +275,30 @@ export function getAudioUri(audio: CodeTourStepAudio, workspaceUri: Uri): Uri {
  * Format duration in seconds to MM:SS format
  */
 export function formatDuration(seconds: number): string {
+  if (!seconds || !isFinite(seconds)) return '--:--';
   const minutes = Math.floor(seconds / 60);
   const remainingSeconds = Math.floor(seconds % 60);
   return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+}
+
+/**
+ * Detects MIME type from the actual file bytes (magic numbers).
+ * Returns null if the format is unrecognised.
+ */
+function sniffMimeType(data: Uint8Array): string | null {
+  if (data.length < 8) return null;
+  // WebM: 1A 45 DF A3
+  if (data[0] === 0x1A && data[1] === 0x45 && data[2] === 0xDF && data[3] === 0xA3) return 'audio/webm';
+  // MP4/M4A: ISO Base Media — 'ftyp' box at offset 4
+  if (data[4] === 0x66 && data[5] === 0x74 && data[6] === 0x79 && data[7] === 0x70) return 'audio/mp4';
+  // WAV: RIFF....WAVE
+  if (data[0] === 0x52 && data[1] === 0x49 && data[2] === 0x46 && data[3] === 0x46) return 'audio/wav';
+  // OGG: OggS
+  if (data[0] === 0x4F && data[1] === 0x67 && data[2] === 0x67 && data[3] === 0x53) return 'audio/ogg';
+  // MP3: ID3 tag or MPEG sync
+  if ((data[0] === 0x49 && data[1] === 0x44 && data[2] === 0x33) ||
+      (data[0] === 0xFF && (data[1] & 0xE0) === 0xE0)) return 'audio/mpeg';
+  return null;
 }
 
 /**
@@ -296,6 +318,78 @@ export function getMimeType(format: string): string {
 }
 
 /**
+ * Transcodes audio data to WAV (PCM) using the system ffmpeg.
+ *
+ * VS Code's Electron build does not support WebM/Opus in the <audio> element
+ * (MEDIA_ERR_SRC_NOT_SUPPORTED, code 4). WAV/PCM has no codec dependency and
+ * plays reliably in all Electron/Chromium webviews.
+ *
+ * Uses stdin→stdout piping — no temp files required.
+ * Returns null if ffmpeg is not available or transcoding fails.
+ */
+// Common ffmpeg locations — VS Code GUI on macOS does not inherit the shell PATH,
+// so Homebrew-installed ffmpeg is invisible unless we probe known paths explicitly.
+const FFMPEG_CANDIDATES = [
+  '/opt/homebrew/bin/ffmpeg',  // macOS Apple Silicon (Homebrew)
+  '/usr/local/bin/ffmpeg',     // macOS Intel (Homebrew) / Linux custom install
+  '/usr/bin/ffmpeg',           // Linux system package
+  'ffmpeg',                    // fallback: rely on PATH (works in some terminal launches)
+];
+
+async function findFfmpeg(): Promise<string | null> {
+  const { execFile } = await import('child_process');
+  for (const candidate of FFMPEG_CANDIDATES) {
+    const found = await new Promise<boolean>((res) => {
+      execFile(candidate, ['-version'], { timeout: 2000 }, (err) => res(!err));
+    });
+    if (found) {
+      return candidate;
+    }
+  }
+  return null;
+}
+
+async function transcodeToWav(input: Uint8Array): Promise<Buffer | null> {
+  const ffmpegPath = await findFfmpeg();
+  if (!ffmpegPath) {
+    console.warn('[CodeTour:audio] ffmpeg not found — tried:', FFMPEG_CANDIDATES.join(', '));
+    return null;
+  }
+
+  return new Promise((resolve) => {
+    let proc: ReturnType<typeof spawn> | null = null;
+    try {
+      proc = spawn(ffmpegPath, [
+        '-v', 'quiet',       // suppress console output
+        '-i', 'pipe:0',      // read from stdin
+        '-c:a', 'pcm_s16le', // PCM 16-bit signed little-endian
+        '-ar', '22050',      // 22 kHz — good enough for speech, half the size of 44.1 kHz
+        '-ac', '1',          // mono
+        '-f', 'wav',
+        'pipe:1'             // write to stdout
+      ], { stdio: ['pipe', 'pipe', 'pipe'] });
+    } catch {
+      resolve(null);
+      return;
+    }
+
+    const chunks: Buffer[] = [];
+    proc.stdout!.on('data', (chunk: Buffer) => chunks.push(chunk));
+    proc.on('close', (code) => {
+      resolve(code === 0 && chunks.length > 0 ? Buffer.concat(chunks) : null);
+    });
+    proc.on('error', () => resolve(null));
+
+    try {
+      proc.stdin!.write(Buffer.from(input));
+      proc.stdin!.end();
+    } catch {
+      resolve(null);
+    }
+  });
+}
+
+/**
  * Converts audio metadata to data URLs for webview playback
  */
 export async function convertAudiosToDataUrls(audios: CodeTourStepAudio[]): Promise<{
@@ -306,12 +400,32 @@ export async function convertAudiosToDataUrls(audios: CodeTourStepAudio[]): Prom
   const workspaceUri = workspace.workspaceFolders?.[0]?.uri;
   if (!workspaceUri) return [];
 
+  console.log(`[CodeTour:audio] convertAudiosToDataUrls — workspace: ${workspaceUri?.fsPath}, count: ${audios.length}`);
   return Promise.all(audios.map(async (audio) => {
     try {
       const audioUri = getAudioUri(audio, workspaceUri);
+      console.log(`[CodeTour:audio] reading: ${audioUri.fsPath}`);
       const audioData = await workspace.fs.readFile(audioUri);
-      const base64 = Buffer.from(audioData).toString('base64');
-      const mimeType = getMimeType(audio.format);
+      const detectedMime = sniffMimeType(audioData);
+      const mimeType = detectedMime ?? getMimeType(audio.format);
+      console.log(`[CodeTour:audio] OK — ${audio.filename} (${audioData.length} bytes, mime: ${mimeType}${detectedMime && detectedMime !== getMimeType(audio.format) ? ` [detected; stored format="${audio.format}"]` : ''})`);
+
+      // VS Code's Electron does not support WebM/Opus in the <audio> element.
+      // Transcode to WAV (PCM) which has no codec dependency.
+      let finalData: Uint8Array = audioData;
+      let finalMime = mimeType;
+      if (mimeType === 'audio/webm') {
+        const wavData = await transcodeToWav(audioData);
+        if (wavData) {
+          finalData = wavData;
+          finalMime = 'audio/wav';
+          console.log(`[CodeTour:audio] transcoded WebM→WAV — ${audio.filename} (${audioData.length}→${wavData.length} bytes)`);
+        } else {
+          console.warn(`[CodeTour:audio] ffmpeg not available — WebM will not play in VS Code webview`);
+        }
+      }
+
+      const base64 = Buffer.from(finalData).toString('base64');
       return {
         id: audio.id,
         filename: audio.filename,
@@ -321,9 +435,10 @@ export async function convertAudiosToDataUrls(audios: CodeTourStepAudio[]): Prom
         caption: audio.caption,
         richNotes: audio.richNotes,
         markers: audio.markers,
-        dataUrl: `data:${mimeType};base64,${base64}`
+        dataUrl: `data:${finalMime};base64,${base64}`
       };
-    } catch {
+    } catch (err: any) {
+      console.error(`[CodeTour:audio] FAILED to read ${audio.path} — ${err?.message ?? err}`);
       return {
         id: audio.id,
         filename: audio.filename,

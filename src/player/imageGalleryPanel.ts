@@ -284,6 +284,10 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
       case "quickRecordAudio":
         await vscode.commands.executeCommand('codetour.quickRecordAudio');
         break;
+
+      case "refresh":
+        this._updateContent();
+        break;
     }
   }
 
@@ -372,7 +376,20 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
     }
 
     const images = this._prepareImageData();
-    const audios = await convertAudiosToDataUrls(this._getAudios());
+    const rawAudios = this._getAudios();
+    const audios = await convertAudiosToDataUrls(rawAudios);
+
+    // Attach webviewUri so the webview can load audio directly via VS Code's
+    // resource server instead of using blob URLs (more reliable in Electron).
+    if (this._view) {
+      const wsUri = vscode.workspace.workspaceFolders?.[0]?.uri;
+      rawAudios.forEach((raw, i) => {
+        if (audios[i] && wsUri) {
+          const fileUri = vscode.Uri.joinPath(wsUri, raw.path);
+          (audios[i] as any).webviewUri = this._view!.webview.asWebviewUri(fileUri).toString();
+        }
+      });
+    }
 
     // Clamp indices
     if (images.length > 0 && this._currentIndex >= images.length) {
@@ -457,7 +474,7 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'nonce-${nonce}'; script-src 'nonce-${nonce}' https://unpkg.com; img-src ${webview.cspSource} data:; media-src ${webview.cspSource} data: blob:; connect-src https: data: blob:; font-src ${webview.cspSource};">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}' https://unpkg.com; img-src ${webview.cspSource} data:; media-src ${webview.cspSource} data: blob:; connect-src https: data: blob:; font-src ${webview.cspSource};">
   <link href="${quillCssUri}" rel="stylesheet">
   <style nonce="${nonce}">
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -1093,6 +1110,7 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
       <button class="mode-btn" id="modeBtnAudio" data-action="switchMode" data-mode="audio">Audio</button>
     </div>
     <button class="note-toggle" id="noteToggleBtn" data-action="toggleParentNote" title="Toggle Tour Notes">&#x1F4D3; Notes</button>
+    <button class="note-toggle" id="refreshBtn" data-action="refresh" title="Refresh content">&#x21BB;</button>
   </div>
 
   <!-- IMAGE MODE (visible by default) -->
@@ -1214,9 +1232,15 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
       var audioIndex = 0;
       var colorPresets = [];
       var wavesurfer = null;
+      var wsAudioCtx = null;
       var wsInitializing = false;
       var wsReady = false;
       var currentAudioSrc = null;
+      var currentBlobUrl = null;
+      var wsDecodeTimeout = null;
+      var wsUsedDummyPeaks = false;
+      var wsMediaFailed = false;  // set on first MEDIA_ERR_SRC_NOT_SUPPORTED to prevent infinite loop
+      var currentBlob = null;
       var autoPlayOnReady = false;
       var textDelta = null;
       var textIsEditing = false;
@@ -1290,6 +1314,7 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
             images = msg.images || [];
             imageIndex = msg.imageIndex || 0;
             audios = msg.audios || [];
+            console.log('[CodeTour:audio] received', audios.length, 'audio(s):', audios.map(function(a) { return a.filename + ' dataUrl=' + (a.dataUrl ? 'YES(' + a.dataUrl.length + 'b)' : 'MISSING') + ' duration=' + a.duration; }));
             audioIndex = msg.audioIndex || 0;
             textDelta = msg.textDelta || null;
             setMode(msg.mode);
@@ -1501,10 +1526,15 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
 
           renderMarkers(cur.markers);
 
-          var src = cur.dataUrl;
+          var src = cur.webviewUri || cur.dataUrl;
           if (src && src !== currentAudioSrc) {
             currentAudioSrc = src;
             loadAudioInWaveSurfer(src);
+          } else if (!src) {
+            el.waveformLoading.style.display = 'none';
+            el.errorMessage.textContent = 'Audio file not found on disk.';
+            el.errorMessage.style.display = 'block';
+            el.playPauseBtn.disabled = true;
           }
         }
 
@@ -1545,10 +1575,15 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
 
           renderMarkers(cur.markers);
 
-          var src = cur.dataUrl;
+          var src = cur.webviewUri || cur.dataUrl;
           if (src && src !== currentAudioSrc) {
             currentAudioSrc = src;
             loadAudioInWaveSurfer(src);
+          } else if (!src) {
+            el.waveformLoading.style.display = 'none';
+            el.errorMessage.textContent = 'Audio file not found on disk.';
+            el.errorMessage.style.display = 'block';
+            el.playPauseBtn.disabled = true;
           }
         }
       }
@@ -1566,6 +1601,11 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
           var s = new Audio(SILENCE);
           s.volume = 0;
           s.play().then(function() { s.pause(); }).catch(function(){});
+        }
+        // Deferred init: first click is a valid user gesture, so AudioContext
+        // can be created and resumed here without being blocked by Chromium.
+        if (pendingAudioSrc && !wsInitializing && !wavesurfer) {
+          initWaveSurfer();
         }
         if (pendingPlay && wavesurfer && wsReady) {
           pendingPlay = false;
@@ -1596,62 +1636,124 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
         wsInitializing = true;
         try {
           document.getElementById('waveform').innerHTML = '';
-          wavesurfer = WaveSurfer.create({
-            container: '#waveform',
-            waveColor: '#4a90d9',
-            progressColor: '#4a90d9',
-            cursorColor: 'transparent',
-            cursorWidth: 0,
-            barWidth: 2,
-            barRadius: 3,
-            responsive: true,
-            height: 52,
-            normalize: true,
-            interact: true,
-            hideScrollbar: false
-          });
+          wsAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+          console.log('[CodeTour:ws] audioContext state before resume:', wsAudioCtx.state);
+          // resume() is async — WaveSurfer must not be created until the context
+          // is confirmed 'running', otherwise decodeAudioData() hangs silently.
+          wsAudioCtx.resume().then(function() {
+            console.log('[CodeTour:ws] audioContext state after resume:', wsAudioCtx.state);
+            wavesurfer = WaveSurfer.create({
+              container: '#waveform',
+              waveColor: '#4a90d9',
+              progressColor: '#4a90d9',
+              cursorColor: 'transparent',
+              cursorWidth: 0,
+              barWidth: 2,
+              barRadius: 3,
+              responsive: true,
+              height: 52,
+              normalize: true,
+              interact: true,
+              hideScrollbar: false,
+              audioContext: wsAudioCtx
+            });
 
-          wavesurfer.on('ready', function() {
-            wsReady = true;
-            el.waveformLoading.style.display = 'none';
-            el.playPauseBtn.disabled = false;
-            updateWsTime();
-            if (autoPlayOnReady) {
-              autoPlayOnReady = false;
-              safePlay();
+            wavesurfer.on('ready', function() {
+              clearTimeout(wsDecodeTimeout);
+              console.log('[CodeTour:ws] ready — duration:', wavesurfer.getDuration());
+              wsReady = true;
+              el.waveformLoading.style.display = 'none';
+              el.playPauseBtn.disabled = false;
+              updateWsTime();
+              if (autoPlayOnReady) {
+                autoPlayOnReady = false;
+                safePlay();
+              }
+              // Hook real duration + error from the underlying <audio> element.
+              // WaveSurfer v7.4.0 emits 'ready' before <audio> fires 'loadedmetadata'
+              // (because we provide a placeholder duration), so we update the display
+              // once the real metadata arrives.
+              var media = wavesurfer.getMediaElement ? wavesurfer.getMediaElement() : null;
+              if (media) {
+                media.addEventListener('loadedmetadata', function() {
+                  if (isFinite(media.duration) && media.duration > 0) {
+                    console.log('[CodeTour:ws] media loadedmetadata — real duration:', media.duration);
+                    updateWsTime();
+                  }
+                }, { once: true });
+                media.addEventListener('error', function() {
+                  var code = media.error && media.error.code;
+                  console.error('[CodeTour:ws] media element error — code:', code);
+                  if (wsMediaFailed) {
+                    // Already handled — do not re-enter
+                    return;
+                  }
+                  wsMediaFailed = true;
+                  clearTimeout(wsDecodeTimeout);
+                  if (code === 4 /* MEDIA_ERR_SRC_NOT_SUPPORTED */) {
+                    // Codec not supported in VS Code's Electron — transcoding didn't run or failed.
+                    // Show a static message; attempting another WaveSurfer load would loop.
+                    el.waveformLoading.style.display = 'none';
+                    el.playPauseBtn.disabled = true;
+                    var msg = document.createElement('div');
+                    msg.id = 'wsUnsupportedMsg';
+                    msg.style.cssText = 'padding:8px;color:#e88;font-size:12px;text-align:center;';
+                    msg.textContent = 'Audio format not supported in VS Code. Install ffmpeg to enable automatic transcoding.';
+                    var wsContainer = document.getElementById('waveform') || el.waveformLoading && el.waveformLoading.parentElement;
+                    if (wsContainer) { wsContainer.appendChild(msg); }
+                  } else {
+                    var cur2 = audios[audioIndex];
+                    showAudioFallback((cur2 && cur2.dataUrl) || currentBlobUrl);
+                  }
+                }, { once: true });
+              }
+            });
+            wavesurfer.on('decode', function(dur) {
+              console.log('[CodeTour:ws] decode — duration:', dur);
+            });
+            wavesurfer.on('loading', function(p) {
+              console.log('[CodeTour:ws] loading —', p);
+              var safePercent = Number.isFinite(p) ? Math.round(p) : 0;
+              el.waveformLoading.textContent = safePercent > 0
+                ? 'Loading waveform... ' + safePercent + '%'
+                : 'Loading waveform...';
+              el.waveformLoading.style.display = 'flex';
+            });
+            wavesurfer.on('play', function() {
+              el.playPauseBtn.textContent = '\\u23F8';
+              el.playingIndicator.style.display = 'inline-flex';
+              vscode.postMessage({ type: 'audioPlaybackStarted', index: audioIndex });
+            });
+            wavesurfer.on('pause', function() {
+              el.playPauseBtn.textContent = '\\u25B6';
+              el.playingIndicator.style.display = 'none';
+              vscode.postMessage({ type: 'audioPlaybackStopped' });
+            });
+            wavesurfer.on('finish', function() {
+              el.playPauseBtn.textContent = '\\u25B6';
+              el.playingIndicator.style.display = 'none';
+              vscode.postMessage({ type: 'audioPlaybackStopped' });
+            });
+            wavesurfer.on('timeupdate', updateWsTime);
+            wavesurfer.on('error', function(err) {
+              clearTimeout(wsDecodeTimeout);
+              console.error('[CodeTour:ws] error —', err);
+              el.errorMessage.textContent = 'Audio error: ' + (err.message || err);
+              el.errorMessage.style.display = 'block';
+              el.waveformLoading.style.display = 'none';
+            });
+
+            // Load the pending audio now that WaveSurfer and AudioContext are ready
+            if (pendingAudioSrc) {
+              doLoad(pendingAudioSrc);
+              pendingAudioSrc = null;
             }
-          });
-          wavesurfer.on('loading', function(p) {
-            el.waveformLoading.textContent = 'Loading waveform... ' + p + '%';
-            el.waveformLoading.style.display = 'flex';
-          });
-          wavesurfer.on('play', function() {
-            el.playPauseBtn.textContent = '\\u23F8';
-            el.playingIndicator.style.display = 'inline-flex';
-            vscode.postMessage({ type: 'audioPlaybackStarted', index: audioIndex });
-          });
-          wavesurfer.on('pause', function() {
-            el.playPauseBtn.textContent = '\\u25B6';
-            el.playingIndicator.style.display = 'none';
-            vscode.postMessage({ type: 'audioPlaybackStopped' });
-          });
-          wavesurfer.on('finish', function() {
-            el.playPauseBtn.textContent = '\\u25B6';
-            el.playingIndicator.style.display = 'none';
-            vscode.postMessage({ type: 'audioPlaybackStopped' });
-          });
-          wavesurfer.on('timeupdate', updateWsTime);
-          wavesurfer.on('error', function(err) {
-            el.errorMessage.textContent = 'Audio error: ' + (err.message || err);
+          }).catch(function(err) {
+            wsInitializing = false;
+            console.error('[CodeTour:ws] AudioContext resume failed:', err);
+            el.errorMessage.textContent = 'Failed to resume audio context: ' + (err.message || err);
             el.errorMessage.style.display = 'block';
-            el.waveformLoading.style.display = 'none';
           });
-
-          // Load the pending audio now that WaveSurfer is ready
-          if (pendingAudioSrc) {
-            doLoad(pendingAudioSrc);
-            pendingAudioSrc = null;
-          }
         } catch (err) {
           wsInitializing = false;
           el.errorMessage.textContent = 'Failed to init player: ' + err.message;
@@ -1666,8 +1768,13 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
         pendingAudioSrc = src;
 
         if (!wavesurfer && !wsInitializing) {
-          // First call — kick off WaveSurfer creation
-          initWaveSurfer();
+          // AudioContext.resume() requires a user gesture in Chromium.
+          // Defer initWaveSurfer() until the first click inside the webview
+          // (see document click handler below). Show a prompt so the user
+          // knows to interact.
+          el.waveformLoading.textContent = 'Click ▶ to load audio';
+          el.waveformLoading.style.display = 'flex';
+          el.playPauseBtn.disabled = false;
           return;
         }
         if (!wavesurfer) {
@@ -1680,14 +1787,181 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
         doLoad(src);
       }
 
+      function dataUrlToBlobUrl(dataUrl) {
+        try {
+          var comma = dataUrl.indexOf(',');
+          var header = dataUrl.substring(0, comma);
+          var mimeMatch = header.match(/data:([^;]+)/);
+          var mime = mimeMatch ? mimeMatch[1] : 'audio/webm';
+          var binary = atob(dataUrl.substring(comma + 1));
+          var bytes = new Uint8Array(binary.length);
+          for (var i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+          // Detect actual MIME from magic bytes in case stored format is wrong
+          if (bytes.length >= 8) {
+            if (bytes[4] === 0x66 && bytes[5] === 0x74 && bytes[6] === 0x79 && bytes[7] === 0x70) mime = 'audio/mp4';
+            else if (bytes[0] === 0x1A && bytes[1] === 0x45 && bytes[2] === 0xDF && bytes[3] === 0xA3) mime = 'audio/webm';
+            else if (bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46) mime = 'audio/wav';
+            else if (bytes[0] === 0x4F && bytes[1] === 0x67 && bytes[2] === 0x67 && bytes[3] === 0x53) mime = 'audio/ogg';
+          }
+          var blob = new Blob([bytes], { type: mime });
+          return { url: URL.createObjectURL(blob), mime: mime, blob: blob };
+        } catch(e) {
+          console.warn('[CodeTour:ws] blob conversion failed:', e);
+          return { url: dataUrl, mime: 'unknown', blob: null };
+        }
+      }
+
+      // Fallback: called when WaveSurfer's decodeAudioData hangs (5 s timeout).
+      //
+      // First attempt (wsUsedDummyPeaks === false):
+      //   Reload via wavesurfer.load(url, peaks, duration) — WaveSurfer v7 skips
+      //   decodeAudioData when peaks are provided and uses its internal <audio>
+      //   element for playback. This keeps the full WaveSurfer UI working.
+      //
+      // Second attempt (wsUsedDummyPeaks === true):
+      //   Both paths failed — show a plain native <audio> as last resort.
+      function showAudioFallback(blobSrc) {
+        clearTimeout(wsDecodeTimeout);
+
+        if (wavesurfer && !wsUsedDummyPeaks) {
+          wsUsedDummyPeaks = true;
+          var knownDuration = (audios[audioIndex] && audios[audioIndex].duration) || undefined;
+          var peaksData = makeDummyPeaks();
+          console.log('[CodeTour:ws] decodeAudioData hung — retrying with dummy peaks, duration:', knownDuration);
+          el.waveformLoading.style.display = 'flex';
+          el.waveformLoading.textContent = 'Loading audio...';
+          el.playPauseBtn.disabled = true;
+          wsDecodeTimeout = setTimeout(function() {
+            if (!wsReady) { showAudioFallback(blobSrc); }
+          }, 4000);
+          // Prefer webviewUri; fall back to loadBlob with actual Blob object
+          var cur = audios[audioIndex];
+          var wvUri = cur && cur.webviewUri;
+          if (wvUri) {
+            wavesurfer.load(wvUri, [peaksData], knownDuration);
+          } else if (currentBlob) {
+            wavesurfer.loadBlob(currentBlob, [peaksData], knownDuration);
+          } else {
+            wavesurfer.load(blobSrc, [peaksData], knownDuration);
+          }
+          return;
+        }
+
+        // Both WaveSurfer paths failed — show a native <audio> element.
+        el.waveformLoading.style.display = 'none';
+        el.errorMessage.style.display = 'none';
+        var waveformEl = document.getElementById('waveform');
+        if (waveformEl) waveformEl.style.display = 'none';
+
+        // Use dataUrl for the fallback <audio> — data: URIs don't rely on any
+        // network loading or URL lifetime, so they work regardless of CSP origin
+        // issues or blob URL revocation.
+        var cur = audios[audioIndex];
+        var fallbackSrc = (cur && cur.dataUrl) || (cur && cur.webviewUri) || blobSrc;
+
+        var existing = document.getElementById('wsFallbackAudio');
+        if (existing) { existing.src = fallbackSrc; existing.style.display = 'block'; return; }
+
+        var container = document.createElement('div');
+        container.id = 'wsFallbackContainer';
+        container.style.cssText = 'padding:8px 0;';
+
+        var audio = document.createElement('audio');
+        audio.id = 'wsFallbackAudio';
+        audio.controls = true;
+        audio.style.cssText = 'width:100%;height:36px;display:block;';
+        audio.src = fallbackSrc;
+        container.appendChild(audio);
+
+        var notice = document.createElement('div');
+        notice.style.cssText = 'font-size:10px;opacity:0.55;margin-top:4px;';
+        notice.textContent = 'Waveform unavailable. Audio playable above.';
+        container.appendChild(notice);
+
+        if (waveformEl) {
+          waveformEl.parentNode.insertBefore(container, waveformEl);
+        }
+        console.log('[CodeTour:ws] native <audio> fallback shown');
+      }
+
+      function makeDummyPeaks() {
+        var n = 200;
+        var p = new Float32Array(n);
+        for (var i = 0; i < n; i++) p[i] = 0.25 + 0.2 * Math.abs(Math.sin(i * 0.18));
+        return p;
+      }
+
       function doLoad(src) {
         if (!wavesurfer) return;
+        wsUsedDummyPeaks = true;
+
+        var cur = audios[audioIndex];
+
+        // Always extract a Blob from cur.dataUrl so we can use loadBlob().
+        // loadBlob() lets WaveSurfer create a fresh blob URL internally (avoids
+        // stale URL issues) AND we can provide a positive duration so WaveSurfer
+        // never waits for loadedmetadata — which hangs in VS Code's webview when
+        // the <audio> element fires 'error' instead of 'loadedmetadata'.
+        if (cur && cur.dataUrl) {
+          if (currentBlobUrl) { URL.revokeObjectURL(currentBlobUrl); currentBlobUrl = null; }
+          var converted = dataUrlToBlobUrl(cur.dataUrl);
+          currentBlobUrl = converted.url;
+          currentBlob = converted.blob;
+          console.log('[CodeTour:ws] doLoad — blob ready, mime:', converted.mime, 'size:', converted.blob ? converted.blob.size : 0);
+        } else if (!cur || !cur.dataUrl) {
+          // No dataUrl — last resort: fall back to src string
+          if (currentBlobUrl) { URL.revokeObjectURL(currentBlobUrl); currentBlobUrl = null; currentBlob = null; }
+          if (src && src.startsWith('data:')) {
+            var c2 = dataUrlToBlobUrl(src);
+            currentBlobUrl = c2.url;
+            currentBlob = c2.blob;
+          }
+        }
+
+        // Hide any previous fallback player / unsupported message
+        var fallbackContainer = document.getElementById('wsFallbackContainer');
+        if (fallbackContainer) fallbackContainer.style.display = 'none';
+        var unsupportedMsg = document.getElementById('wsUnsupportedMsg');
+        if (unsupportedMsg) unsupportedMsg.remove();
+        var waveformEl = document.getElementById('waveform');
+        if (waveformEl) waveformEl.style.display = '';
+
         wsReady = false;
+        wsMediaFailed = false;
         el.waveformLoading.style.display = 'flex';
-        el.waveformLoading.textContent = 'Loading waveform...';
+        el.waveformLoading.textContent = 'Loading audio...';
         el.playPauseBtn.disabled = true;
         el.errorMessage.style.display = 'none';
-        wavesurfer.load(src);
+
+        if (wsAudioCtx && wsAudioCtx.state !== 'running') {
+          wsAudioCtx.resume();
+        }
+
+        var peaks = makeDummyPeaks();
+        // Provide a positive placeholder duration so WaveSurfer skips the
+        // loadedmetadata wait (WaveSurfer v7.4.0 hangs forever if <audio>
+        // fires 'error' rather than 'loadedmetadata').  Real duration is
+        // updated via the loadedmetadata listener added in the 'ready' handler.
+        var knownDuration = (cur && cur.duration > 0) ? cur.duration : 1;
+
+        clearTimeout(wsDecodeTimeout);
+        wsDecodeTimeout = setTimeout(function() {
+          if (!wsReady) {
+            console.warn('[CodeTour:ws] load timed out — showing native audio fallback');
+            var cur3 = audios[audioIndex];
+            showAudioFallback((cur3 && cur3.dataUrl) || currentBlobUrl || src);
+          }
+        }, 6000);
+
+        if (currentBlob) {
+          console.log('[CodeTour:ws] doLoad — loadBlob with dummy peaks, knownDuration:', knownDuration);
+          wavesurfer.loadBlob(currentBlob, [peaks], knownDuration);
+        } else {
+          // No blob available — use webviewUri or raw src
+          var fallbackUri = (cur && cur.webviewUri) || src;
+          console.log('[CodeTour:ws] doLoad — load(uri) with dummy peaks, knownDuration:', knownDuration);
+          wavesurfer.load(fallbackUri, [peaks], knownDuration);
+        }
       }
 
       function updateWsTime() {
@@ -1912,6 +2186,9 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
               case 'toggleParentNote':
                 vscode.postMessage({ type: 'toggleParentNote' });
                 break;
+              case 'refresh':
+                vscode.postMessage({ type: 'refresh' });
+                break;
               case 'quickRecordAudio':
                 vscode.postMessage({ type: 'quickRecordAudio' });
                 break;
@@ -1948,7 +2225,13 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
 
       // Audio playback controls
       el.playPauseBtn.addEventListener('click', function() {
-        if (wavesurfer) wavesurfer.playPause();
+        if (wavesurfer && wsReady) {
+          wavesurfer.playPause();
+        } else {
+          // WaveSurfer not ready yet — auto-play once it finishes loading.
+          // (initWaveSurfer will be triggered by the document click handler above.)
+          autoPlayOnReady = true;
+        }
       });
       el.speedSelector.addEventListener('change', function() {
         if (wavesurfer) wavesurfer.setPlaybackRate(parseFloat(el.speedSelector.value));
