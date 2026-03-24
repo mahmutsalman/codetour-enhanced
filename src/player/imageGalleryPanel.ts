@@ -1891,6 +1891,29 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
         return p;
       }
 
+      // Decode the audio blob with Web Audio API and extract per-block peak
+      // amplitude values. Returns { peaks: Float32Array, duration: number }.
+      // Falls through to the catch path if the format is not decodable.
+      function extractRealPeaks(blob, audioCtx, numPeaks) {
+        return blob.arrayBuffer().then(function(buffer) {
+          return audioCtx.decodeAudioData(buffer);
+        }).then(function(audioBuffer) {
+          var channelData = audioBuffer.getChannelData(0);
+          var blockSize = Math.max(1, Math.floor(channelData.length / numPeaks));
+          var peaks = new Float32Array(numPeaks);
+          for (var i = 0; i < numPeaks; i++) {
+            var max = 0;
+            var offset = i * blockSize;
+            for (var j = 0; j < blockSize; j++) {
+              var val = Math.abs(channelData[offset + j] || 0);
+              if (val > max) max = val;
+            }
+            peaks[i] = max;
+          }
+          return { peaks: peaks, duration: audioBuffer.duration };
+        });
+      }
+
       function doLoad(src) {
         if (!wavesurfer) return;
         wsUsedDummyPeaks = true;
@@ -1937,11 +1960,6 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
           wsAudioCtx.resume();
         }
 
-        var peaks = makeDummyPeaks();
-        // Provide a positive placeholder duration so WaveSurfer skips the
-        // loadedmetadata wait (WaveSurfer v7.4.0 hangs forever if <audio>
-        // fires 'error' rather than 'loadedmetadata').  Real duration is
-        // updated via the loadedmetadata listener added in the 'ready' handler.
         var knownDuration = (cur && cur.duration > 0) ? cur.duration : 1;
 
         clearTimeout(wsDecodeTimeout);
@@ -1953,14 +1971,28 @@ export class ImageGalleryPanelProvider implements vscode.WebviewViewProvider {
           }
         }, 6000);
 
-        if (currentBlob) {
-          console.log('[CodeTour:ws] doLoad — loadBlob with dummy peaks, knownDuration:', knownDuration);
-          wavesurfer.loadBlob(currentBlob, [peaks], knownDuration);
+        if (currentBlob && wsAudioCtx) {
+          // Decode audio to extract real amplitude peaks — gives an accurate
+          // waveform instead of a placeholder sine wave.
+          el.waveformLoading.textContent = 'Analyzing waveform...';
+          var blobSnapshot = currentBlob;
+          extractRealPeaks(blobSnapshot, wsAudioCtx, 200).then(function(result) {
+            if (!wavesurfer || !currentBlob) return;
+            console.log('[CodeTour:ws] doLoad — loadBlob with real peaks, duration:', result.duration);
+            wavesurfer.loadBlob(currentBlob, [result.peaks], result.duration);
+          }).catch(function(err) {
+            console.warn('[CodeTour:ws] peak extraction failed, using dummy peaks:', err);
+            if (!wavesurfer || !currentBlob) return;
+            wavesurfer.loadBlob(currentBlob, [makeDummyPeaks()], knownDuration);
+          });
+        } else if (currentBlob) {
+          console.log('[CodeTour:ws] doLoad — loadBlob with dummy peaks (no audioCtx), knownDuration:', knownDuration);
+          wavesurfer.loadBlob(currentBlob, [makeDummyPeaks()], knownDuration);
         } else {
           // No blob available — use webviewUri or raw src
           var fallbackUri = (cur && cur.webviewUri) || src;
           console.log('[CodeTour:ws] doLoad — load(uri) with dummy peaks, knownDuration:', knownDuration);
-          wavesurfer.load(fallbackUri, [peaks], knownDuration);
+          wavesurfer.load(fallbackUri, [makeDummyPeaks()], knownDuration);
         }
       }
 
