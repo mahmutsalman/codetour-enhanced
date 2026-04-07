@@ -17,6 +17,7 @@ import {
   startCodeTour
 } from "../store/actions";
 import { progress } from "../store/storage";
+import { discoverTours } from "../store/provider";
 import { readUriContents } from "../utils";
 import { CodeTourNode, TopicNode } from "./tree/nodes";
 import {
@@ -486,6 +487,14 @@ export function registerPlayerCommands() {
       } else {
         await assignTourToTopic(node.tour, selected.label);
       }
+    }
+  );
+
+  vscode.commands.registerCommand(
+    `${EXTENSION_NAME}.refreshTours`,
+    async () => {
+      await discoverTours();
+      vscode.window.showInformationMessage("Tours refreshed.");
     }
   );
 }

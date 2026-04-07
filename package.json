@@ -435,6 +435,12 @@
         "icon": "$(note)"
       },
       {
+        "command": "codetour.refreshTours",
+        "title": "Refresh Tours",
+        "category": "CodeTour Enhanced",
+        "icon": "$(refresh)"
+      },
+      {
         "command": "codetour.createTopic",
         "title": "New Topic",
         "category": "CodeTour Enhanced",
@@ -774,6 +780,11 @@
           "command": "codetour.createTopic",
           "when": "view == codetourEnhanced.tours",
           "group": "navigation@7"
+        },
+        {
+          "command": "codetour.refreshTours",
+          "when": "view == codetourEnhanced.tours",
+          "group": "navigation@8"
         }
       ],
       "view/item/context": [
